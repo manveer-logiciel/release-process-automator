@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create JIRA Card - Release Card Automator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .form-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .required-field::after {
+            content: " *";
+            color: #dc3545;
+        }
+        .success-message {
+            display: none;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        .loading-spinner {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-rocket me-2"></i>
+                Release Card Automator
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">
+                    <i class="fas fa-home me-1"></i>
+                    Home
+                </a>
+                <a class="nav-link" href="/logout">
+                    <i class="fas fa-sign-out-alt me-1"></i>
+                    Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- Header -->
+                <div class="text-center mb-5">
+                    <h1 class="display-5 fw-bold">
+                        <i class="fas fa-plus-circle text-primary me-3"></i>
+                        Create JIRA Card
+                    </h1>
+                    <p class="lead text-muted">Fill out the form below to create a new JIRA card</p>
+                </div>
+
+                <!-- Success Message -->
+                <div id="successMessage" class="success-message">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-check-circle fa-2x me-3"></i>
+                        <div>
+                            <h5 class="mb-1">Card Created Successfully!</h5>
+                            <p class="mb-0">Your JIRA card has been created. <a href="#" id="cardLink" class="text-white fw-bold">View Card</a></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="errorMessage" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="errorText"></span>
+                </div>
+
+                <!-- Form -->
+                <form id="createCardForm" class="form-section">
+                    <div class="row g-4">
+                        <!-- Project Selection -->
+                        <div class="col-12">
+                            <label for="project" class="form-label required-field">Project</label>
+                            <select class="form-select" id="project" name="project" required>
+                                <option value="">Select a project...</option>
+                                {% for project in projects %}
+                                <option value="{{ project.key }}">{{ project.key }} - {{ project.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Title -->
+                        <div class="col-12">
+                            <label for="title" class="form-label required-field">Title</label>
+                            <input type="text" class="form-control" id="title" name="title" 
+                                   placeholder="Enter card title..." required>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="col-12">
+                            <label for="description" class="form-label required-field">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="4" 
+                                      placeholder="Enter detailed description..." required></textarea>
+                        </div>
+
+                        <!-- Issue Type -->
+                        <div class="col-md-6">
+                            <label for="issueType" class="form-label">Issue Type</label>
+                            <select class="form-select" id="issueType" name="issue_type">
+                                <option value="Production Change">Production Change</option>
+                            </select>
+                        </div>
+
+                        <!-- Priority -->
+                        <div class="col-md-6">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                                <option value="Highest">Highest</option>
+                                <option value="Low">Low</option>
+                                <option value="Lowest">Lowest</option>
+                            </select>
+                        </div>
+
+                        <!-- Due Date -->
+                        <div class="col-md-6">
+                            <label for="dueDate" class="form-label">Due Date</label>
+                            <input type="date" class="form-control" id="dueDate" name="due_date">
+                        </div>
+
+                        <!-- Work Type -->
+                        <div class="col-md-6">
+                            <label for="workType" class="form-label">Work Type</label>
+                            <input type="text" class="form-control" id="workType" name="work_type" 
+                                   value="Production Change" readonly>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="col-12 text-center">
+                            <button type="submit" class="btn btn-primary btn-lg px-5">
+                                <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                                <i class="fas fa-plus me-2"></i>
+                                Create Card
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- GitHub Integration Info -->
+                {% if github_authenticated %}
+                <div class="alert alert-info">
+                    <i class="fab fa-github me-2"></i>
+                    <strong>GitHub Connected:</strong> Repository integration is available for advanced workflows.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Load issue types when project changes
+        document.getElementById('project').addEventListener('change', async function() {
+            const projectKey = this.value;
+            const issueTypeSelect = document.getElementById('issueType');
+            
+            if (!projectKey) {
+                issueTypeSelect.innerHTML = '<option value="Production Change">Production Change</option>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/projects/${projectKey}/issue-types`);
+                const issueTypes = await response.json();
+                
+                issueTypeSelect.innerHTML = '';
+                
+                // Add Production Change first if available
+                if (issueTypes['Production Change']) {
+                    issueTypeSelect.innerHTML += '<option value="Production Change" selected>Production Change</option>';
+                }
+                
+                // Add other issue types
+                for (const [name, id] of Object.entries(issueTypes)) {
+                    if (name !== 'Production Change') {
+                        issueTypeSelect.innerHTML += `<option value="${name}">${name}</option>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading issue types:', error);
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('createCardForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const spinner = submitBtn.querySelector('.loading-spinner');
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+            
+            // Collect form data
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            
+            try {
+                const response = await fetch('/api/create-issue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // Show success message
+                document.getElementById('cardLink').href = result.url;
+                document.getElementById('cardLink').textContent = result.key;
+                successMessage.style.display = 'block';
+                
+                // Reset form
+                this.reset();
+                
+                // Scroll to success message
+                successMessage.scrollIntoView({ behavior: 'smooth' });
+                
+            } catch (error) {
+                // Show error message
+                document.getElementById('errorText').textContent = error.message;
+                errorMessage.style.display = 'block';
+                errorMessage.scrollIntoView({ behavior: 'smooth' });
+            } finally {
+                // Hide loading state
+                submitBtn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        });
+
+        // Set default due date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        document.getElementById('dueDate').value = tomorrow.toISOString().split('T')[0];
+    </script>
+</body>
+</html>

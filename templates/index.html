@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JIRA Release Card Automator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .auth-card {
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+        }
+        .auth-card.authenticated {
+            border-color: #28a745;
+            background-color: #f8fff9;
+        }
+        .auth-card.not-authenticated {
+            border-color: #dc3545;
+            background-color: #fff8f8;
+        }
+        .status-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        .authenticated .status-icon {
+            color: #28a745;
+        }
+        .not-authenticated .status-icon {
+            color: #dc3545;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4rem 0;
+        }
+        .feature-card {
+            height: 100%;
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-rocket me-2"></i>
+                Release Card Automator
+            </a>
+            <div class="navbar-nav ms-auto">
+                {% if jira_authenticated or github_authenticated %}
+                <a class="nav-link" href="/logout">
+                    <i class="fas fa-sign-out-alt me-1"></i>
+                    Logout
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 fw-bold mb-4">
+                <i class="fas fa-magic me-3"></i>
+                Automate Your Release Process
+            </h1>
+            <p class="lead mb-4">
+                Seamlessly create JIRA cards and manage your release workflow with integrated authentication
+            </p>
+        </div>
+    </section>
+
+    <!-- Authentication Status -->
+    <section class="py-5">
+        <div class="container">
+            <h2 class="text-center mb-5">
+                <i class="fas fa-shield-alt me-2"></i>
+                Authentication Status
+            </h2>
+            
+            <div class="row g-4">
+                <!-- JIRA Authentication -->
+                <div class="col-md-6">
+                    <div class="card auth-card h-100 text-center p-4 {% if jira_authenticated %}authenticated{% else %}not-authenticated{% endif %}">
+                        <div class="card-body">
+                            <i class="fas {% if jira_authenticated %}fa-check-circle{% else %}fa-times-circle{% endif %} status-icon"></i>
+                            <h4 class="card-title">
+                                <i class="fab fa-atlassian me-2"></i>
+                                JIRA
+                            </h4>
+                            {% if jira_authenticated %}
+                                <p class="card-text text-success">
+                                    <i class="fas fa-check me-1"></i>
+                                    Successfully authenticated with JIRA
+                                </p>
+                                <p class="text-muted small">You can now create JIRA cards</p>
+                            {% else %}
+                                <p class="card-text text-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    Not authenticated with JIRA
+                                </p>
+                                <a href="/auth/jira" class="btn btn-primary">
+                                    <i class="fas fa-sign-in-alt me-1"></i>
+                                    Connect JIRA
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GitHub Authentication -->
+                <div class="col-md-6">
+                    <div class="card auth-card h-100 text-center p-4 {% if github_authenticated %}authenticated{% else %}not-authenticated{% endif %}">
+                        <div class="card-body">
+                            <i class="fas {% if github_authenticated %}fa-check-circle{% else %}fa-times-circle{% endif %} status-icon"></i>
+                            <h4 class="card-title">
+                                <i class="fab fa-github me-2"></i>
+                                GitHub
+                            </h4>
+                            {% if github_authenticated %}
+                                <p class="card-text text-success">
+                                    <i class="fas fa-check me-1"></i>
+                                    Successfully authenticated with GitHub
+                                </p>
+                                <p class="text-muted small">Repository integration available</p>
+                            {% else %}
+                                <p class="card-text text-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    Not authenticated with GitHub
+                                </p>
+                                <a href="/auth/github" class="btn btn-dark">
+                                    <i class="fas fa-sign-in-alt me-1"></i>
+                                    Connect GitHub
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Action Section -->
+    {% if jira_authenticated %}
+    <section class="py-5 bg-light">
+        <div class="container text-center">
+            <h2 class="mb-4">
+                <i class="fas fa-plus-circle me-2"></i>
+                Ready to Create Cards
+            </h2>
+            <p class="lead mb-4">You're all set! Start creating JIRA cards for your release process.</p>
+            <a href="/create-card" class="btn btn-success btn-lg">
+                <i class="fas fa-plus me-2"></i>
+                Create JIRA Card
+            </a>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Features Section -->
+    <section class="py-5">
+        <div class="container">
+            <h2 class="text-center mb-5">
+                <i class="fas fa-star me-2"></i>
+                Features
+            </h2>
+            
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card feature-card border-0 shadow-sm">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-lock text-primary" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <h5 class="card-title">Secure OAuth</h5>
+                            <p class="card-text">Secure authentication with JIRA and GitHub using industry-standard OAuth 2.0</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card feature-card border-0 shadow-sm">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-rocket text-success" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <h5 class="card-title">Quick Creation</h5>
+                            <p class="card-text">Create JIRA cards instantly with pre-configured templates and smart defaults</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card feature-card border-0 shadow-sm">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-sync text-info" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <h5 class="card-title">Multi-Project</h5>
+                            <p class="card-text">Support for multiple JIRA projects with dynamic issue type detection</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-0">
+                <i class="fas fa-code me-1"></i>
+                Release Card Automator - Streamline Your Workflow
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
