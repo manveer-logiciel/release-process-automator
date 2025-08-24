@@ -134,7 +134,7 @@ class JiraClient:
                 'Epic': '10000'
             }
     
-    def create_issue(self, project_key, title, description, issue_type="Story", priority="Medium"):
+    def create_issue(self, project_key, title, description, issue_type="Production Change", priority="Medium", work_type=None, due_date=None):
         """Create a JIRA issue"""
         # Get issue types to find the correct ID
         issue_types = self.get_issue_types(project_key)
@@ -161,29 +161,44 @@ class JiraClient:
                     "key": project_key
                 },
                 "summary": title,
-                "description": {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [
-                        {
-                            "type": "paragraph",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": description
-                                }
-                            ]
-                        }
-                    ]
-                },
                 "issuetype": {
                     "id": issue_types[issue_type]
-                },
-                "priority": {
-                    "id": priority_id
                 }
             }
         }
+        
+        # Add description only if it's allowed for this issue type
+        if issue_type != "Production Change":
+            issue_data["fields"]["description"] = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": description
+                            }
+                        ]
+                    }
+                ]
+            }
+        
+        # Add priority only if it's allowed for this issue type
+        if issue_type != "Production Change":
+            issue_data["fields"]["priority"] = {
+                "id": priority_id
+            }
+        
+        # Add Work Type if provided - skip for now to avoid field conflicts
+        # Work Type field mapping varies by JIRA instance
+        # if work_type:
+        #     issue_data["fields"]["customfield_10020"] = work_type
+        
+        # Add Due Date if provided
+        if due_date:
+            issue_data["fields"]["duedate"] = due_date
         
         url = f"{self.base_url}/rest/api/3/issue"
         
@@ -218,13 +233,29 @@ def cli():
 @click.option('--title', '-t', required=True, help='Title/Summary of the JIRA card')
 @click.option('--description', '-d', required=True, help='Description of the JIRA card')
 @click.option('--project', '-P', help='Project key (if not provided, will show available projects)')
-@click.option('--type', '-T', default='Story', help='Issue type (default: Story)')
+@click.option('--type', '-T', default='Production Change', help='Issue type (default: Production Change)')
 @click.option('--priority', '-p', default='Medium', 
               type=click.Choice(['Highest', 'High', 'Medium', 'Low', 'Lowest']),
               help='Priority level (default: Medium)')
+@click.option('--work-type', '-w', default='Production Change', help='Work type (default: Production Change)')
+@click.option('--due-date', help='Due date in YYYY-MM-DD format (if not provided, will be prompted)')
 @click.option('--dry-run', is_flag=True, help='Show what would be created without actually creating it')
-def create(title, description, project, type, priority, dry_run):
+def create(title, description, project, type, priority, work_type, due_date, dry_run):
     """Create a new JIRA card"""
+    
+    # Prompt for due date if not provided
+    if not due_date and not dry_run:
+        due_date = click.prompt("Due date (YYYY-MM-DD format, or press Enter to skip)", default="", show_default=False)
+        if due_date.strip() == "":
+            due_date = None
+        else:
+            # Validate date format
+            try:
+                from datetime import datetime
+                datetime.strptime(due_date, '%Y-%m-%d')
+            except ValueError:
+                click.echo("❌ Invalid date format. Please use YYYY-MM-DD format.")
+                sys.exit(1)
     
     if dry_run:
         click.echo("DRY RUN - Would create JIRA card with:")
@@ -232,6 +263,8 @@ def create(title, description, project, type, priority, dry_run):
         click.echo(f"  Description: {description}")
         click.echo(f"  Type: {type}")
         click.echo(f"  Priority: {priority}")
+        click.echo(f"  Work Type: {work_type}")
+        click.echo(f"  Due Date: {due_date or 'Not set'}")
         return
     
     jira = JiraClient()
@@ -263,12 +296,16 @@ def create(title, description, project, type, priority, dry_run):
     click.echo(f"Creating JIRA card in project: {projects[project]['name']} ({project})")
     
     # Create the issue
-    result = jira.create_issue(project, title, description, type, priority)
+    result = jira.create_issue(project, title, description, type, priority, work_type, due_date)
     
     if result:
         click.echo(f"✅ Successfully created JIRA card!")
         click.echo(f"   Key: {result['key']}")
         click.echo(f"   URL: {result['url']}")
+        if work_type:
+            click.echo(f"   Work Type: {work_type}")
+        if due_date:
+            click.echo(f"   Due Date: {due_date}")
     else:
         click.echo("❌ Failed to create JIRA card")
         sys.exit(1)
