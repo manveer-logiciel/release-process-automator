@@ -26,8 +26,8 @@ class JiraClient:
             click.echo("Error: Missing required environment variables. Check your .env file.", err=True)
             sys.exit(1)
         
-        # Extract project key from board URL
-        self.project_key = self._extract_project_key()
+        # Extract board ID from board URL
+        self.board_id = self._extract_board_id()
         
         self.headers = {
             'Authorization': f'Basic {self._get_auth_string()}',
@@ -41,23 +41,45 @@ class JiraClient:
         auth_str = f"{self.email}:{self.token}"
         return base64.b64encode(auth_str.encode()).decode()
     
-    def _extract_project_key(self):
-        """Extract project key from board URL"""
+    def _extract_board_id(self):
+        """Extract board ID from board URL"""
         if self.board_url:
-            # Extract project key from URL like: https://leap.atlassian.net/jira/software/c/projects/DEVOPS/boards/115
+            # Extract board ID from URL like: https://leap.atlassian.net/jira/software/c/projects/DEVOPS/boards/115
             parts = self.board_url.split('/')
             try:
-                project_index = parts.index('projects') + 1
-                return parts[project_index]
+                board_index = parts.index('boards') + 1
+                return parts[board_index]
             except (ValueError, IndexError):
                 pass
         
-        # Default fallback - you may need to adjust this
-        return "DEVOPS"
+        # Default fallback
+        return "115"
     
-    def get_project_info(self):
+    def get_board_projects(self):
+        """Get all projects associated with the board"""
+        url = f"{self.base_url}/rest/agile/1.0/board/{self.board_id}/project"
+        
+        try:
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            projects = {}
+            for project in data.get('values', []):
+                projects[project['key']] = {
+                    'name': project['name'],
+                    'key': project['key'],
+                    'id': project['id']
+                }
+            
+            return projects
+        except requests.exceptions.RequestException as e:
+            click.echo(f"Error fetching board projects: {e}", err=True)
+            return {}
+    
+    def get_project_info(self, project_key):
         """Get project information to validate connection"""
-        url = f"{self.base_url}/rest/api/3/project/{self.project_key}"
+        url = f"{self.base_url}/rest/api/3/project/{project_key}"
         
         try:
             response = requests.get(url, headers=self.headers)
@@ -67,12 +89,12 @@ class JiraClient:
             click.echo(f"Error connecting to JIRA: {e}", err=True)
             return None
     
-    def get_issue_types(self):
+    def get_issue_types(self, project_key):
         """Get available issue types for the project"""
         # Try the createmeta endpoint first (more reliable)
         url = f"{self.base_url}/rest/api/3/issue/createmeta"
         params = {
-            'projectKeys': self.project_key,
+            'projectKeys': project_key,
             'expand': 'projects.issuetypes'
         }
         
@@ -85,14 +107,14 @@ class JiraClient:
             projects = data.get('projects', [])
             
             for project in projects:
-                if project.get('key') == self.project_key:
+                if project.get('key') == project_key:
                     for issue_type in project.get('issuetypes', []):
                         issue_types[issue_type['name']] = issue_type['id']
                     break
             
             # Fallback: if no issue types found, try alternative endpoint
             if not issue_types:
-                fallback_url = f"{self.base_url}/rest/api/3/project/{self.project_key}"
+                fallback_url = f"{self.base_url}/rest/api/3/project/{project_key}"
                 fallback_response = requests.get(fallback_url, headers=self.headers)
                 fallback_response.raise_for_status()
                 project_data = fallback_response.json()
@@ -112,10 +134,10 @@ class JiraClient:
                 'Epic': '10000'
             }
     
-    def create_issue(self, title, description, issue_type="Task", priority="Medium"):
+    def create_issue(self, project_key, title, description, issue_type="Story", priority="Medium"):
         """Create a JIRA issue"""
         # Get issue types to find the correct ID
-        issue_types = self.get_issue_types()
+        issue_types = self.get_issue_types(project_key)
         
         if issue_type not in issue_types:
             available_types = list(issue_types.keys())
@@ -136,7 +158,7 @@ class JiraClient:
         issue_data = {
             "fields": {
                 "project": {
-                    "key": self.project_key
+                    "key": project_key
                 },
                 "summary": title,
                 "description": {
@@ -195,12 +217,13 @@ def cli():
 @cli.command()
 @click.option('--title', '-t', required=True, help='Title/Summary of the JIRA card')
 @click.option('--description', '-d', required=True, help='Description of the JIRA card')
-@click.option('--type', '-T', default='Task', help='Issue type (default: Task)')
+@click.option('--project', '-P', help='Project key (if not provided, will show available projects)')
+@click.option('--type', '-T', default='Story', help='Issue type (default: Story)')
 @click.option('--priority', '-p', default='Medium', 
               type=click.Choice(['Highest', 'High', 'Medium', 'Low', 'Lowest']),
               help='Priority level (default: Medium)')
 @click.option('--dry-run', is_flag=True, help='Show what would be created without actually creating it')
-def create(title, description, type, priority, dry_run):
+def create(title, description, project, type, priority, dry_run):
     """Create a new JIRA card"""
     
     if dry_run:
@@ -213,15 +236,34 @@ def create(title, description, type, priority, dry_run):
     
     jira = JiraClient()
     
-    # Validate connection
-    project_info = jira.get_project_info()
+    # Get available projects from board
+    projects = jira.get_board_projects()
+    if not projects:
+        click.echo("❌ No projects found on the board")
+        sys.exit(1)
+    
+    # If no project specified, show available projects and prompt for selection
+    if not project:
+        click.echo("Available projects on your board:")
+        for key, info in projects.items():
+            click.echo(f"  {key}: {info['name']}")
+        
+        project = click.prompt("\nSelect project key", type=click.Choice(list(projects.keys())))
+    
+    # Validate selected project
+    if project not in projects:
+        click.echo(f"❌ Project '{project}' not found on board. Available: {list(projects.keys())}")
+        sys.exit(1)
+    
+    # Validate connection to selected project
+    project_info = jira.get_project_info(project)
     if not project_info:
         sys.exit(1)
     
-    click.echo(f"Creating JIRA card in project: {project_info.get('name', jira.project_key)}")
+    click.echo(f"Creating JIRA card in project: {projects[project]['name']} ({project})")
     
     # Create the issue
-    result = jira.create_issue(title, description, type, priority)
+    result = jira.create_issue(project, title, description, type, priority)
     
     if result:
         click.echo(f"✅ Successfully created JIRA card!")
@@ -233,25 +275,56 @@ def create(title, description, type, priority, dry_run):
 
 
 @cli.command()
-def info():
+def projects():
+    """List all projects available on the board"""
+    jira = JiraClient()
+    
+    projects = jira.get_board_projects()
+    if projects:
+        click.echo("Available projects on your board:")
+        for key, info in projects.items():
+            click.echo(f"  {key}: {info['name']}")
+    else:
+        click.echo("❌ No projects found on the board")
+
+
+@cli.command()
+@click.option('--project', '-P', help='Show info for specific project')
+def info(project):
     """Show JIRA connection information"""
     jira = JiraClient()
     
     click.echo("JIRA Configuration:")
     click.echo(f"  Base URL: {jira.base_url}")
     click.echo(f"  Email: {jira.email}")
-    click.echo(f"  Project Key: {jira.project_key}")
+    click.echo(f"  Board ID: {jira.board_id}")
     
-    # Test connection
-    project_info = jira.get_project_info()
-    if project_info:
-        click.echo(f"  Project Name: {project_info.get('name')}")
-        click.echo("  ✅ Connection successful")
+    # Get available projects
+    projects = jira.get_board_projects()
+    if projects:
+        click.echo(f"  Available Projects: {', '.join(projects.keys())}")
         
-        # Show available issue types
-        issue_types = jira.get_issue_types()
-        if issue_types:
-            click.echo(f"  Available Issue Types: {', '.join(issue_types.keys())}")
+        # If specific project requested, show details
+        if project:
+            if project in projects:
+                project_info = jira.get_project_info(project)
+                if project_info:
+                    click.echo(f"\nProject Details ({project}):")
+                    click.echo(f"  Name: {project_info.get('name')}")
+                    click.echo("  ✅ Connection successful")
+                    
+                    # Show available issue types for this project
+                    issue_types = jira.get_issue_types(project)
+                    if issue_types:
+                        click.echo(f"  Available Issue Types: {', '.join(issue_types.keys())}")
+                else:
+                    click.echo(f"  ❌ Connection to project {project} failed")
+            else:
+                click.echo(f"❌ Project '{project}' not found. Available: {list(projects.keys())}")
+        else:
+            click.echo("  ✅ Board connection successful")
+            click.echo("\nUse 'python jira_cli.py projects' to see all projects")
+            click.echo("Use 'python jira_cli.py info --project PROJECT_KEY' for project details")
     else:
         click.echo("  ❌ Connection failed")
 
