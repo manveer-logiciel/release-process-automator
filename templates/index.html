@@ -41,103 +41,162 @@
         .feature-card:hover {
             transform: translateY(-5px);
         }
+        .auth-form {
+            display: none;
+        }
+        .auth-form.show {
+            display: block;
+        }
+        .credential-input {
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="/">
+            <a class="navbar-brand" href="#">
                 <i class="fas fa-rocket me-2"></i>
                 Release Card Automator
             </a>
             <div class="navbar-nav ms-auto">
-                {% if jira_authenticated or github_authenticated %}
-                <a class="nav-link" href="/logout">
+                <button class="btn btn-outline-light btn-sm" onclick="clearCredentials()" id="logoutBtn" style="display: none;">
                     <i class="fas fa-sign-out-alt me-1"></i>
-                    Logout
-                </a>
-                {% endif %}
+                    Clear Credentials
+                </button>
             </div>
         </div>
     </nav>
 
     <!-- Hero Section -->
-    <section class="hero-section">
+    <section class="hero-section py-3">
         <div class="container text-center">
-            <h1 class="display-4 fw-bold mb-4">
-                <i class="fas fa-magic me-3"></i>
-                Automate Your Release Process
-            </h1>
-            <p class="lead mb-4">
-                Seamlessly create JIRA cards and manage your release workflow with integrated authentication
+            <h3 class="fw-bold mb-2">
+                <i class="fas fa-magic me-2"></i>
+                Release Card Automator
+            </h3>
+            <p class="mb-0 text-muted">
+                Create JIRA release cards with GitHub integration
             </p>
         </div>
     </section>
 
-    <!-- Authentication Status -->
-    <section class="py-5">
+    <!-- Authentication Section -->
+    <section class="py-3">
         <div class="container">
-            <h2 class="text-center mb-5">
-                <i class="fas fa-shield-alt me-2"></i>
-                Authentication Status
-            </h2>
+            <div class="row justify-content-center mb-3">
+                <div class="col-auto">
+                    <h6 class="text-muted mb-0">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Auth Status
+                    </h6>
+                </div>
+            </div>
             
-            <div class="row g-4">
+            <div class="row g-2 justify-content-center">
                 <!-- JIRA Authentication -->
-                <div class="col-md-6">
-                    <div class="card auth-card h-100 text-center p-4 {% if jira_authenticated %}authenticated{% else %}not-authenticated{% endif %}">
-                        <div class="card-body">
-                            <i class="fas {% if jira_authenticated %}fa-check-circle{% else %}fa-times-circle{% endif %} status-icon"></i>
-                            <h4 class="card-title">
-                                <i class="fab fa-atlassian me-2"></i>
-                                JIRA
-                            </h4>
-                            {% if jira_authenticated %}
-                                <p class="card-text text-success">
-                                    <i class="fas fa-check me-1"></i>
-                                    Successfully authenticated with JIRA
-                                </p>
-                                <p class="text-muted small">You can now create JIRA cards</p>
-                            {% else %}
-                                <p class="card-text text-danger">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>
-                                    Not authenticated with JIRA
-                                </p>
-                                <a href="/auth/jira" class="btn btn-primary">
-                                    <i class="fas fa-sign-in-alt me-1"></i>
-                                    Connect JIRA
-                                </a>
-                            {% endif %}
+                <div class="col-auto">
+                    <div class="card auth-card p-2" id="jiraCard" style="min-width: 200px;">
+                        <div class="card-body text-center p-2">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <i class="fas fa-times-circle status-icon me-2" id="jiraIcon"></i>
+                                <div class="text-start">
+                                    <h6 class="mb-0">
+                                        <i class="fab fa-atlassian me-1"></i>
+                                        JIRA
+                                    </h6>
+                                    <div id="jiraStatus">
+                                        <small class="text-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            Not connected
+                                        </small>
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-primary ms-2" onclick="showJiraForm()">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- JIRA Authentication Form -->
+                            <div class="auth-form" id="jiraForm">
+                                <div class="text-start">
+                                    <div class="credential-input">
+                                        <label class="form-label">JIRA Domain</label>
+                                        <input type="text" class="form-control" id="jiraDomain" value="leap.atlassian.net" placeholder="leap.atlassian.net">
+                                        <small class="form-text text-muted">Your JIRA instance URL (without https://)</small>
+                                    </div>
+                                    <div class="credential-input">
+                                        <label class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="jiraEmail" placeholder="your-email@company.com">
+                                    </div>
+                                    <div class="credential-input">
+                                        <label class="form-label">API Token</label>
+                                        <input type="password" class="form-control" id="jiraToken" placeholder="Your JIRA API Token">
+                                        <small class="form-text text-muted">
+                                            <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank">Create API Token</a>
+                                        </small>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-success" onclick="saveJiraCredentials()">
+                                            <i class="fas fa-save me-1"></i>
+                                            Save & Test
+                                        </button>
+                                        <button class="btn btn-secondary" onclick="hideJiraForm()">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- GitHub Authentication -->
-                <div class="col-md-6">
-                    <div class="card auth-card h-100 text-center p-4 {% if github_authenticated %}authenticated{% else %}not-authenticated{% endif %}">
-                        <div class="card-body">
-                            <i class="fas {% if github_authenticated %}fa-check-circle{% else %}fa-times-circle{% endif %} status-icon"></i>
-                            <h4 class="card-title">
-                                <i class="fab fa-github me-2"></i>
-                                GitHub
-                            </h4>
-                            {% if github_authenticated %}
-                                <p class="card-text text-success">
-                                    <i class="fas fa-check me-1"></i>
-                                    Successfully authenticated with GitHub
-                                </p>
-                                <p class="text-muted small">Repository integration available</p>
-                            {% else %}
-                                <p class="card-text text-danger">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>
-                                    Not authenticated with GitHub
-                                </p>
-                                <a href="/auth/github" class="btn btn-dark">
-                                    <i class="fas fa-sign-in-alt me-1"></i>
-                                    Connect GitHub
-                                </a>
-                            {% endif %}
+                <div class="col-auto">
+                    <div class="card auth-card p-2" id="githubCard" style="min-width: 200px;">
+                        <div class="card-body text-center p-2">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <i class="fas fa-times-circle status-icon me-2" id="githubIcon"></i>
+                                <div class="text-start">
+                                    <h6 class="mb-0">
+                                        <i class="fab fa-github me-1"></i>
+                                        GitHub
+                                    </h6>
+                                    <div id="githubStatus">
+                                        <small class="text-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            Not connected
+                                        </small>
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-dark ms-2" onclick="showGithubForm()">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- GitHub Authentication Form -->
+                            <div class="auth-form" id="githubForm">
+                                <div class="text-start">
+                                    <div class="credential-input">
+                                        <label class="form-label">Personal Access Token</label>
+                                        <input type="password" class="form-control" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                                        <small class="form-text text-muted">
+                                            <a href="https://github.com/settings/tokens" target="_blank">Create Personal Access Token</a>
+                                            <br>Required scopes: repo, read:user
+                                        </small>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-success" onclick="saveGithubCredentials()">
+                                            <i class="fas fa-save me-1"></i>
+                                            Save & Test
+                                        </button>
+                                        <button class="btn btn-secondary" onclick="hideGithubForm()">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -146,21 +205,211 @@
     </section>
 
     <!-- Action Section -->
-    {% if jira_authenticated %}
-    <section class="py-5 bg-light">
+    <section class="py-5 bg-light" id="actionSection" style="display: none;">
         <div class="container text-center">
             <h2 class="mb-4">
                 <i class="fas fa-plus-circle me-2"></i>
                 Ready to Create Cards
             </h2>
             <p class="lead mb-4">You're all set! Start creating JIRA cards for your release process.</p>
-            <a href="/create-card" class="btn btn-success btn-lg">
+            <button class="btn btn-success btn-lg" onclick="showCreateCardForm()">
                 <i class="fas fa-plus me-2"></i>
                 Create JIRA Card
-            </a>
+            </button>
         </div>
     </section>
-    {% endif %}
+
+    <!-- Create Card Form -->
+    <section class="py-5" id="createCardSection" style="display: none;">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="mb-0">
+                                <i class="fas fa-plus-circle me-2"></i>
+                                Create JIRA Release Card
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="createCardForm">
+                                <!-- Release Type Selection -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Release Type</label>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <input type="radio" class="btn-check" name="releaseType" id="plannedRelease" value="planned" autocomplete="off" required>
+                                            <label class="btn btn-outline-primary w-100" for="plannedRelease">
+                                                <i class="fas fa-calendar-alt me-2"></i>
+                                                Planned Release
+                                            </label>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="radio" class="btn-check" name="releaseType" id="hotfixRelease" value="hotfix" autocomplete="off" required>
+                                            <label class="btn btn-outline-danger w-100" for="hotfixRelease">
+                                                <i class="fas fa-fire me-2"></i>
+                                                Hotfix Release
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Deployment Type Selection -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Deployment Type</label>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <input type="radio" class="btn-check" name="deploymentType" id="webApi" value="web-api" autocomplete="off" required>
+                                            <label class="btn btn-outline-info w-100" for="webApi">
+                                                <i class="fas fa-globe me-2"></i>
+                                                Web & API
+                                            </label>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="radio" class="btn-check" name="deploymentType" id="webOnly" value="web-only" autocomplete="off" required>
+                                            <label class="btn btn-outline-success w-100" for="webOnly">
+                                                <i class="fas fa-desktop me-2"></i>
+                                                Web Only
+                                            </label>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="radio" class="btn-check" name="deploymentType" id="apiOnly" value="api-only" autocomplete="off" required>
+                                            <label class="btn btn-outline-warning w-100" for="apiOnly">
+                                                <i class="fas fa-code me-2"></i>
+                                                API Only
+                                            </label>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="radio" class="btn-check" name="deploymentType" id="publicApi" value="public-api" autocomplete="off" required>
+                                            <label class="btn btn-outline-purple w-100" for="publicApi">
+                                                <i class="fas fa-share-alt me-2"></i>
+                                                Public API
+                                            </label>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="radio" class="btn-check" name="deploymentType" id="mobile" value="mobile" autocomplete="off" required>
+                                            <label class="btn btn-outline-secondary w-100" for="mobile">
+                                                <i class="fas fa-mobile-alt me-2"></i>
+                                                Mobile
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- GitHub Repository (Auto-detected) -->
+                                <div class="mb-3">
+                                    <label class="form-label">GitHub Repository</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="githubRepo" placeholder="Will be auto-detected" readonly>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="fetchVersionFromGitHub()" id="fetchVersionBtn" disabled>
+                                            <i class="fas fa-sync me-1"></i>
+                                            Fetch Version
+                                        </button>
+                                    </div>
+                                    <small class="form-text text-muted">Repository is automatically detected based on project selection</small>
+                                </div>
+
+                                <!-- Version Display -->
+                                <div class="mb-3" id="versionSection" style="display: none;">
+                                    <!-- Single Version (for Web Only, API Only, Mobile) -->
+                                    <div id="singleVersionSection">
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <label class="form-label">Current Version</label>
+                                                <input type="text" class="form-control" id="currentVersion" readonly>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label">New Version</label>
+                                                <input type="text" class="form-control" id="newVersion" readonly>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Dual Version (for Web & API) -->
+                                    <div id="dualVersionSection" style="display: none;">
+                                        <div class="row mb-2">
+                                            <div class="col-12">
+                                                <h6 class="mb-2"><i class="fas fa-desktop me-1"></i> Web Version</h6>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label">Current Web</label>
+                                                <input type="text" class="form-control" id="currentWebVersion" readonly>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label">New Web</label>
+                                                <input type="text" class="form-control" id="newWebVersion" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <h6 class="mb-2"><i class="fas fa-code me-1"></i> API Version</h6>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label">Current API</label>
+                                                <input type="text" class="form-control" id="currentApiVersion" readonly>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label">New API</label>
+                                                <input type="text" class="form-control" id="newApiVersion" readonly>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Auto-generated Title -->
+                                <div class="mb-3">
+                                    <label class="form-label">Release Title</label>
+                                    <input type="text" class="form-control" id="releaseTitle" placeholder="Will be auto-generated" readonly>
+                                    <small class="form-text text-muted">Title will be generated based on your selections</small>
+                                </div>
+
+                                <!-- Project Key -->
+                                <div class="mb-3">
+                                    <label class="form-label">Project Key</label>
+                                    <select class="form-select" id="projectKey" required>
+                                        <option value="LEAP" selected>LEAP</option>
+                                        <option value="PAY">PAY</option>
+                                    </select>
+                                </div>
+
+                                <!-- Issue Type -->
+                                <div class="mb-3">
+                                    <label class="form-label">Issue Type</label>
+                                    <select class="form-select" id="issueType" required>
+                                        <option value="Production Change" selected>Production Change</option>
+                                        <option value="Task">Task</option>
+                                    </select>
+                                </div>
+
+                                <!-- Release Date -->
+                                <div class="mb-3">
+                                    <label class="form-label">Release Date</label>
+                                    <input type="date" class="form-control" id="releaseDate" required>
+                                    <small class="form-text text-muted">This will be set as the due date in JIRA</small>
+                                </div>
+
+                                <!-- Description -->
+                                <div class="mb-3">
+                                    <label class="form-label">Description (Optional)</label>
+                                    <textarea class="form-control" id="description" rows="3" placeholder="Additional release notes or details"></textarea>
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-plus me-1"></i>
+                                        Create Release Card
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="hideCreateCardForm()">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
     <!-- Features Section -->
     <section class="py-5">
@@ -174,9 +423,9 @@
                 <div class="col-md-4">
                     <div class="card feature-card border-0 shadow-sm">
                         <div class="card-body text-center p-4">
-                            <i class="fas fa-lock text-primary" style="font-size: 3rem; margin-bottom: 1rem;"></i>
-                            <h5 class="card-title">Secure OAuth</h5>
-                            <p class="card-text">Secure authentication with JIRA and GitHub using industry-standard OAuth 2.0</p>
+                            <i class="fas fa-key text-primary" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <h5 class="card-title">Simple Authentication</h5>
+                            <p class="card-text">Easy setup with email/API tokens for JIRA and personal access tokens for GitHub</p>
                         </div>
                     </div>
                 </div>
@@ -215,5 +464,586 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Check authentication status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+        });
+
+        function checkAuthStatus() {
+            const jiraAuth = localStorage.getItem('jira_auth');
+            const githubAuth = localStorage.getItem('github_auth');
+            
+            if (jiraAuth) {
+                const jiraData = JSON.parse(jiraAuth);
+                updateJiraStatus(true, jiraData.domain);
+            }
+            
+            if (githubAuth) {
+                updateGithubStatus(true);
+            }
+            
+            // Show action section if JIRA is authenticated
+            if (jiraAuth) {
+                document.getElementById('actionSection').style.display = 'block';
+            }
+            
+            // Show logout button if any service is authenticated
+            if (jiraAuth || githubAuth) {
+                document.getElementById('logoutBtn').style.display = 'block';
+            }
+        }
+
+        function showJiraForm() {
+            document.getElementById('jiraStatus').style.display = 'none';
+            document.getElementById('jiraForm').classList.add('show');
+        }
+
+        function hideJiraForm() {
+            document.getElementById('jiraStatus').style.display = 'block';
+            document.getElementById('jiraForm').classList.remove('show');
+        }
+
+        function showGithubForm() {
+            document.getElementById('githubStatus').style.display = 'none';
+            document.getElementById('githubForm').classList.add('show');
+        }
+
+        function hideGithubForm() {
+            document.getElementById('githubStatus').style.display = 'block';
+            document.getElementById('githubForm').classList.remove('show');
+        }
+
+        async function saveJiraCredentials() {
+            const domain = document.getElementById('jiraDomain').value;
+            const email = document.getElementById('jiraEmail').value;
+            const token = document.getElementById('jiraToken').value;
+            
+            if (!domain || !email || !token) {
+                alert('Please fill in all JIRA fields');
+                return;
+            }
+            
+            // Test JIRA connection via server proxy
+            try {
+                const response = await fetch('/api/jira/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        domain: domain,
+                        email: email,
+                        token: token
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    // Save credentials
+                    localStorage.setItem('jira_auth', JSON.stringify({
+                        domain: domain,
+                        email: email,
+                        token: token
+                    }));
+                    
+                    updateJiraStatus(true, domain);
+                    hideJiraForm();
+                    document.getElementById('actionSection').style.display = 'block';
+                    document.getElementById('logoutBtn').style.display = 'block';
+                    
+                    // Clear form
+                    document.getElementById('jiraDomain').value = 'leap.atlassian.net';
+                    document.getElementById('jiraEmail').value = '';
+                    document.getElementById('jiraToken').value = '';
+                } else {
+                    alert('JIRA authentication failed: ' + (result.error || 'Please check your credentials.'));
+                }
+            } catch (error) {
+                alert('Error connecting to JIRA: ' + error.message);
+            }
+        }
+
+        async function saveGithubCredentials() {
+            const token = document.getElementById('githubToken').value;
+            
+            if (!token) {
+                alert('Please enter your GitHub token');
+                return;
+            }
+            
+            // Test GitHub connection via server proxy
+            try {
+                const response = await fetch('/api/github/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    // Save credentials
+                    localStorage.setItem('github_auth', JSON.stringify({
+                        token: token
+                    }));
+                    
+                    updateGithubStatus(true);
+                    hideGithubForm();
+                    document.getElementById('logoutBtn').style.display = 'block';
+                    
+                    // Clear form
+                    document.getElementById('githubToken').value = '';
+                } else {
+                    alert('GitHub authentication failed: ' + (result.error || 'Please check your token.'));
+                }
+            } catch (error) {
+                alert('Error connecting to GitHub: ' + error.message);
+            }
+        }
+
+        function updateJiraStatus(authenticated, domain = '') {
+            const card = document.getElementById('jiraCard');
+            const icon = document.getElementById('jiraIcon');
+            const status = document.getElementById('jiraStatus');
+            
+            if (authenticated) {
+                card.classList.remove('not-authenticated');
+                card.classList.add('authenticated');
+                icon.classList.remove('fa-times-circle');
+                icon.classList.add('fa-check-circle');
+                status.innerHTML = `
+                    <p class="card-text text-success">
+                        <i class="fas fa-check me-1"></i>
+                        Connected to ${domain}
+                    </p>
+                    <p class="text-muted small">You can now create JIRA cards</p>
+                `;
+            } else {
+                card.classList.remove('authenticated');
+                card.classList.add('not-authenticated');
+                icon.classList.remove('fa-check-circle');
+                icon.classList.add('fa-times-circle');
+            }
+        }
+
+        function updateGithubStatus(authenticated) {
+            const card = document.getElementById('githubCard');
+            const icon = document.getElementById('githubIcon');
+            const status = document.getElementById('githubStatus');
+            
+            if (authenticated) {
+                card.classList.remove('not-authenticated');
+                card.classList.add('authenticated');
+                icon.classList.remove('fa-times-circle');
+                icon.classList.add('fa-check-circle');
+                status.innerHTML = `
+                    <p class="card-text text-success">
+                        <i class="fas fa-check me-1"></i>
+                        Successfully authenticated with GitHub
+                    </p>
+                    <p class="text-muted small">Repository integration available</p>
+                `;
+            } else {
+                card.classList.remove('authenticated');
+                card.classList.add('not-authenticated');
+                icon.classList.remove('fa-check-circle');
+                icon.classList.add('fa-times-circle');
+            }
+        }
+
+        function clearCredentials() {
+            localStorage.removeItem('jira_auth');
+            localStorage.removeItem('github_auth');
+            location.reload();
+        }
+
+        function showCreateCardForm() {
+            document.getElementById('createCardSection').style.display = 'block';
+            document.getElementById('createCardSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function hideCreateCardForm() {
+            document.getElementById('createCardSection').style.display = 'none';
+        }
+
+        // Version increment logic
+        function incrementVersion(version, releaseType) {
+            const parts = version.split('.').map(Number);
+            if (parts.length !== 3) return version; // Invalid version format
+            
+            if (releaseType === 'hotfix') {
+                // Increment patch version (last number)
+                parts[2] += 1;
+            } else if (releaseType === 'planned') {
+                // Increment minor version (middle number), reset patch to 0
+                parts[1] += 1;
+                parts[2] = 0;
+            }
+            
+            return parts.join('.');
+        }
+
+        // Generate release title based on selections
+        function generateReleaseTitle(releaseType, version, isHotfix = false) {
+            const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+            
+            if (!deploymentType) return '';
+            
+            const hotfixSuffix = isHotfix ? ' (Hotfix)' : '';
+            
+            const titleMap = {
+                'web-only': `LEAP CRM Web ${version} Release${hotfixSuffix}`,
+                'api-only': `LEAP CRM API ${version} Release${hotfixSuffix}`,
+                'public-api': `Leap CRM L5 Public API Release ${version}${hotfixSuffix}`,
+                'mobile': `LEAP CRM Mobile Release ${version}${hotfixSuffix}`
+            };
+            
+            const title = titleMap[deploymentType] || `LEAP CRM Release ${version}${hotfixSuffix}`;
+            document.getElementById('releaseTitle').value = title;
+            return title;
+        }
+        
+        function updateReleaseTitle() {
+            const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+            const releaseTypeEl = document.querySelector('input[name="releaseType"]:checked');
+            
+            if (!deploymentType || !releaseTypeEl) return;
+            
+            const isHotfix = releaseTypeEl.value === 'hotfix';
+            const hotfixSuffix = isHotfix ? ' (Hotfix)' : '';
+            
+            if (deploymentType === 'web-api') {
+                const webVersion = document.getElementById('newWebVersion').value;
+                const apiVersion = document.getElementById('newApiVersion').value;
+                if (webVersion && apiVersion) {
+                    // Create custom title for Web & API with separate versions
+                    const title = `LEAP CRM Web ${webVersion} and API ${apiVersion} Release${hotfixSuffix}`;
+                    document.getElementById('releaseTitle').value = title;
+                }
+            } else {
+                const version = document.getElementById('newVersion').value;
+                if (version) {
+                    generateReleaseTitle(deploymentType, version, isHotfix);
+                }
+            }
+        }
+        
+        function compareVersions(v1, v2) {
+            const parts1 = v1.split('.').map(Number);
+            const parts2 = v2.split('.').map(Number);
+            
+            for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+                const part1 = parts1[i] || 0;
+                const part2 = parts2[i] || 0;
+                
+                if (part1 > part2) return 1;
+                if (part1 < part2) return -1;
+            }
+            return 0;
+        }
+
+        // Fetch version from GitHub
+        async function fetchVersionFromGitHub() {
+            const githubAuth = localStorage.getItem('github_auth');
+            const projectKey = document.getElementById('projectKey').value;
+            const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+            const releaseType = document.querySelector('input[name="releaseType"]:checked')?.value;
+            
+            if (!githubAuth) {
+                alert('Please authenticate with GitHub first');
+                return;
+            }
+            
+            if (!projectKey) {
+                alert('Please select a project first');
+                return;
+            }
+            
+            const token = JSON.parse(githubAuth).token;
+            const projectRepos = projectRepoMapping[projectKey];
+            
+            try {
+                if (deploymentType === 'web-api') {
+                    // Fetch both web and API versions
+                    const [webResponse, apiResponse] = await Promise.all([
+                        fetch('/api/github/version', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: token, repo: projectRepos.web })
+                        }),
+                        fetch('/api/github/version', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: token, repo: projectRepos.api })
+                        })
+                    ]);
+                    
+                    const webResult = await webResponse.json();
+                    const apiResult = await apiResponse.json();
+                    
+                    if (webResponse.ok && apiResponse.ok && webResult.success && apiResult.success) {
+                        // Set current versions
+                        document.getElementById('currentWebVersion').value = webResult.version;
+                        document.getElementById('currentApiVersion').value = apiResult.version;
+                        
+                        // Calculate new versions
+                        if (releaseType) {
+                            const newWebVersion = incrementVersion(webResult.version, releaseType);
+                            const newApiVersion = incrementVersion(apiResult.version, releaseType);
+                            document.getElementById('newWebVersion').value = newWebVersion;
+                            document.getElementById('newApiVersion').value = newApiVersion;
+                        }
+                        
+                        // Show dual version section
+                        document.getElementById('singleVersionSection').style.display = 'none';
+                        document.getElementById('dualVersionSection').style.display = 'block';
+                        document.getElementById('versionSection').style.display = 'block';
+                        
+                        // Generate title with versions
+                        setTimeout(() => updateReleaseTitle(), 100);
+                    } else {
+                        alert('Error fetching versions: ' + (webResult.error || apiResult.error || 'Unknown error'));
+                    }
+                } else {
+                    // Single repository for web-only, api-only, public-api, or mobile
+                    let repo;
+                    if (deploymentType === 'web-only') {
+                        repo = projectRepos.web;
+                    } else if (deploymentType === 'api-only') {
+                        repo = projectRepos.api;
+                    } else if (deploymentType === 'public-api') {
+                        repo = projectRepos.publicApi;
+                    } else if (deploymentType === 'mobile') {
+                        repo = projectRepos.mobile;
+                    }
+                    
+                    const response = await fetch('/api/github/version', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: token, repo: repo })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok && result.success) {
+                        document.getElementById('currentVersion').value = result.version;
+                        
+                        if (releaseType) {
+                            const newVersion = incrementVersion(result.version, releaseType);
+                            document.getElementById('newVersion').value = newVersion;
+                        }
+                        
+                        // Show single version section
+                        document.getElementById('dualVersionSection').style.display = 'none';
+                        document.getElementById('singleVersionSection').style.display = 'block';
+                        document.getElementById('versionSection').style.display = 'block';
+                        
+                        // Generate title with version
+                        setTimeout(() => updateReleaseTitle(), 100);
+                    } else {
+                        alert('Error fetching version: ' + (result.error || 'Unknown error'));
+                    }
+                }
+            } catch (error) {
+                alert('Error fetching version: ' + error.message);
+            }
+        }
+
+        // Project to repository mapping
+        const projectRepoMapping = {
+            'LEAP': {
+                web: 'JobProgress-Org/jp_app_main_v2',
+                api: 'JobProgress-Org/jp_api_main',
+                publicApi: 'JobProgress-Org/jp_api_main_v2',
+                mobile: 'JobProgress-Org/jp_mobile_main_v2'
+            },
+            'PAY': {
+                web: 'JobProgress-Org/jp_app_main_v2',
+                api: 'JobProgress-Org/jp_api_main',
+                publicApi: 'JobProgress-Org/jp_api_main_v2',
+                mobile: 'JobProgress-Org/jp_mobile_main_v2'
+            }
+        };
+
+        // Auto-detect repository based on project selection
+        function detectRepository() {
+            const projectKey = document.getElementById('projectKey').value;
+            const projectRepos = projectRepoMapping[projectKey];
+            
+            if (projectRepos) {
+                // Show repository info based on deployment type
+                const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+                if (deploymentType === 'web-api') {
+                    document.getElementById('githubRepo').value = `Web: ${projectRepos.web}, API: ${projectRepos.api}`;
+                } else if (deploymentType === 'web-only') {
+                    document.getElementById('githubRepo').value = projectRepos.web;
+                } else if (deploymentType === 'api-only') {
+                    document.getElementById('githubRepo').value = projectRepos.api;
+                } else if (deploymentType === 'public-api') {
+                    document.getElementById('githubRepo').value = projectRepos.publicApi;
+                } else if (deploymentType === 'mobile') {
+                    document.getElementById('githubRepo').value = projectRepos.mobile;
+                }
+                
+                document.getElementById('fetchVersionBtn').disabled = false;
+                
+                // Auto-fetch version if release type and deployment type are selected
+                const releaseType = document.querySelector('input[name="releaseType"]:checked');
+                const deploymentTypeSelected = document.querySelector('input[name="deploymentType"]:checked');
+                if (releaseType && deploymentTypeSelected) {
+                    fetchVersionFromGitHub();
+                }
+            } else {
+                document.getElementById('githubRepo').value = '';
+                document.getElementById('fetchVersionBtn').disabled = true;
+                document.getElementById('versionSection').style.display = 'none';
+            }
+        }
+
+        // Add event listeners for form changes
+        document.addEventListener('DOMContentLoaded', function() {
+            // Listen for project selection changes
+            document.getElementById('projectKey').addEventListener('change', detectRepository);
+            
+            // Listen for release type changes
+            document.querySelectorAll('input[name="releaseType"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+                    
+                    if (deploymentType === 'web-api') {
+                        // Handle dual version scenario
+                        const currentWebVersion = document.getElementById('currentWebVersion').value;
+                        const currentApiVersion = document.getElementById('currentApiVersion').value;
+                        
+                        if (currentWebVersion && currentApiVersion) {
+                            const newWebVersion = incrementVersion(currentWebVersion, this.value);
+                            const newApiVersion = incrementVersion(currentApiVersion, this.value);
+                            document.getElementById('newWebVersion').value = newWebVersion;
+                            document.getElementById('newApiVersion').value = newApiVersion;
+                            updateReleaseTitle();
+                        } else {
+                            // Auto-fetch if repository is already detected
+                            const repo = document.getElementById('githubRepo').value;
+                            if (repo && repo !== 'Will be auto-detected') {
+                                fetchVersionFromGitHub();
+                            }
+                        }
+                    } else {
+                        // Handle single version scenario
+                        const currentVersion = document.getElementById('currentVersion').value;
+                        if (currentVersion) {
+                            const newVersion = incrementVersion(currentVersion, this.value);
+                            document.getElementById('newVersion').value = newVersion;
+                            updateReleaseTitle();
+                        } else {
+                            // Auto-fetch if repository is already detected
+                            const repo = document.getElementById('githubRepo').value;
+                            if (repo && repo !== 'Will be auto-detected') {
+                                fetchVersionFromGitHub();
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Listen for deployment type changes
+            document.querySelectorAll('input[name="deploymentType"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    detectRepository(); // Update repository display
+                    updateReleaseTitle(); // Update title
+                });
+            });
+        });
+
+        document.getElementById('createCardForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const jiraAuth = JSON.parse(localStorage.getItem('jira_auth'));
+            if (!jiraAuth) {
+                alert('Please authenticate with JIRA first');
+                return;
+            }
+            
+            const projectKey = document.getElementById('projectKey').value;
+            const issueType = document.getElementById('issueType').value;
+            const summary = document.getElementById('releaseTitle').value;
+            const description = document.getElementById('description').value;
+            const githubRepo = document.getElementById('githubRepo').value;
+            const releaseDate = document.getElementById('releaseDate').value;
+            
+            let fullDescription = description;
+            if (githubRepo) {
+                fullDescription += `\n\nGitHub Repository: https://github.com/${githubRepo}`;
+            }
+            
+            const issueData = {
+                fields: {
+                    project: {
+                        key: projectKey
+                    },
+                    summary: summary,
+                    issuetype: {
+                        name: issueType
+                    },
+                    duedate: releaseDate
+                }
+            };
+            
+            try {
+                const response = await fetch('/api/jira/create-issue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        domain: jiraAuth.domain,
+                        email: jiraAuth.email,
+                        token: jiraAuth.token,
+                        issue_data: issueData
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    // Create success message with clickable URL
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'alert alert-success mt-3';
+                    successDiv.innerHTML = `
+                        <h5><i class="fas fa-check-circle me-2"></i>JIRA Card Created Successfully!</h5>
+                        <p><strong>Key:</strong> ${result.key}</p>
+                        <p><strong>URL:</strong> <a href="${result.url}" target="_blank" class="alert-link">${result.url}</a></p>
+                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                    `;
+                    
+                    // Insert success message at the top of the form
+                    const form = document.getElementById('createCardForm');
+                    form.parentNode.insertBefore(successDiv, form);
+                    
+                    // Clear form
+                    document.getElementById('createCardForm').reset();
+                    hideCreateCardForm();
+                    
+                    // Auto-remove success message after 10 seconds
+                    setTimeout(() => {
+                        if (successDiv.parentNode) {
+                            successDiv.remove();
+                        }
+                    }, 10000);
+                } else {
+                    alert('Error creating JIRA card: ' + JSON.stringify(result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error creating JIRA card: ' + error.message);
+            }
+        });
+    </script>
 </body>
 </html>

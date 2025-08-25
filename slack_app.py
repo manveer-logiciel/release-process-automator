@@ -362,6 +362,168 @@ def create_issue():
     
     return jsonify(result)
 
+@app.route('/api/jira/test', methods=['POST'])
+def test_jira_connection():
+    """Test JIRA connection with provided credentials"""
+    data = request.json
+    domain = data.get('domain')
+    email = data.get('email')
+    token = data.get('token')
+    
+    if not all([domain, email, token]):
+        return jsonify({'error': 'Missing credentials'}), 400
+    
+    # Test connection by getting user info
+    auth_string = base64.b64encode(f"{email}:{token}".encode()).decode()
+    headers = {
+        'Authorization': f'Basic {auth_string}',
+        'Accept': 'application/json'
+    }
+    
+    try:
+        response = requests.get(f'https://{domain}/rest/api/3/myself', headers=headers)
+        if response.status_code == 200:
+            user_info = response.json()
+            return jsonify({
+                'success': True,
+                'user': {
+                    'displayName': user_info.get('displayName'),
+                    'emailAddress': user_info.get('emailAddress')
+                }
+            })
+        else:
+            return jsonify({'error': 'Authentication failed'}), 401
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/jira/create-issue', methods=['POST'])
+def create_jira_issue():
+    """Create a JIRA issue via server-side proxy"""
+    data = request.json
+    
+    # Extract credentials and issue data
+    domain = data.get('domain')
+    email = data.get('email')
+    token = data.get('token')
+    issue_data = data.get('issue_data')
+    
+    if not all([domain, email, token, issue_data]):
+        return jsonify({'error': 'Missing required data'}), 400
+    
+    # Create JIRA issue
+    auth_string = base64.b64encode(f"{email}:{token}".encode()).decode()
+    headers = {
+        'Authorization': f'Basic {auth_string}',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    
+    try:
+        response = requests.post(
+            f'https://{domain}/rest/api/3/issue',
+            headers=headers,
+            json=issue_data
+        )
+        
+        if response.status_code == 201:
+            result = response.json()
+            return jsonify({
+                'success': True,
+                'key': result.get('key'),
+                'id': result.get('id'),
+                'url': f'https://{domain}/browse/{result.get("key")}'
+            })
+        else:
+            error_data = response.json() if response.content else {'message': 'Unknown error'}
+            return jsonify({'error': error_data}), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/github/test', methods=['POST'])
+def test_github_connection():
+    """Test GitHub connection with provided token"""
+    data = request.json
+    token = data.get('token')
+    
+    if not token:
+        return jsonify({'error': 'Missing token'}), 400
+    
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    
+    try:
+        response = requests.get('https://api.github.com/user', headers=headers)
+        if response.status_code == 200:
+            user_info = response.json()
+            return jsonify({
+                'success': True,
+                'user': {
+                    'login': user_info.get('login'),
+                    'name': user_info.get('name')
+                }
+            })
+        else:
+            return jsonify({'error': 'Authentication failed'}), 401
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/github/version', methods=['POST'])
+def get_github_version():
+    """Get latest version/tag from GitHub repository"""
+    data = request.json
+    token = data.get('token')
+    repo = data.get('repo')  # format: owner/repository
+    
+    if not token or not repo:
+        return jsonify({'error': 'Missing token or repository'}), 400
+    
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    
+    try:
+        # Get latest release
+        response = requests.get(f'https://api.github.com/repos/{repo}/releases/latest', headers=headers)
+        
+        if response.status_code == 200:
+            release_info = response.json()
+            tag_name = release_info.get('tag_name', '')
+            # Remove 'v' prefix if present
+            version = tag_name.lstrip('v')
+            return jsonify({
+                'success': True,
+                'version': version,
+                'tag_name': tag_name
+            })
+        elif response.status_code == 404:
+            # No releases found, try to get tags
+            response = requests.get(f'https://api.github.com/repos/{repo}/tags', headers=headers)
+            if response.status_code == 200:
+                tags = response.json()
+                if tags:
+                    latest_tag = tags[0]['name']
+                    version = latest_tag.lstrip('v')
+                    return jsonify({
+                        'success': True,
+                        'version': version,
+                        'tag_name': latest_tag
+                    })
+                else:
+                    return jsonify({
+                        'success': True,
+                        'version': '0.0.0',
+                        'tag_name': 'v0.0.0'
+                    })
+            else:
+                return jsonify({'error': 'Could not fetch repository information'}), 404
+        else:
+            return jsonify({'error': 'Repository not found or access denied'}), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/logout')
 def logout():
     """Clear all authentication data"""
