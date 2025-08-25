@@ -9,7 +9,7 @@ import json
 import requests
 import base64
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_from_directory
 from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator, RedirectUriPageRenderer
 from slack_sdk.oauth.installation_store import FileInstallationStore
@@ -524,6 +524,345 @@ def get_github_version():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/jira/update-custom-fields', methods=['POST'])
+def update_jira_custom_fields():
+    """Update custom fields for Production Change Details and Rollback Script"""
+    data = request.json
+    
+    # Extract credentials and field data
+    domain = data.get('domain')
+    email = data.get('email')
+    token = data.get('token')
+    issue_key = data.get('issue_key')
+    production_details = data.get('production_details')
+    rollback_script = data.get('rollback_script')
+    
+    if not all([domain, email, token, issue_key]):
+        print(f"Missing required data: domain={domain}, email={email}, token={'***' if token else None}, issue_key={issue_key}")
+        return jsonify({'error': 'Missing required data'}), 400
+    
+    print(f"Updating custom fields for issue: {issue_key}")
+    print(f"Production details length: {len(production_details) if production_details else 0}")
+    print(f"Rollback script length: {len(rollback_script) if rollback_script else 0}")
+    
+    # Update JIRA issue custom fields
+    auth_string = base64.b64encode(f"{email}:{token}".encode()).decode()
+    headers = {
+        'Authorization': f'Basic {auth_string}',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    
+    # Get the issue to find custom field IDs
+    try:
+        get_response = requests.get(
+            f'https://{domain}/rest/api/3/issue/{issue_key}',
+            headers=headers
+        )
+        print(f"Get issue response: {get_response.status_code}")
+        if get_response.ok:
+            issue_data = get_response.json()
+            fields = issue_data.get('fields', {})
+            print(f"Available fields: {list(fields.keys())}")
+            
+            # Look for custom fields that might be Production Change Details and Rollback Script
+            custom_fields = {}
+            for field_id, field_value in fields.items():
+                if field_id.startswith('customfield_'):
+                    custom_fields[field_id] = field_value
+            
+            print(f"Custom fields found: {list(custom_fields.keys())}")
+            
+            # Try to find fields by looking at field metadata
+            meta_response = requests.get(
+                f'https://{domain}/rest/api/3/issue/{issue_key}/editmeta',
+                headers=headers
+            )
+            if meta_response.ok:
+                meta_data = meta_response.json()
+                print(f"Edit metadata: {meta_data}")
+                
+                # Look for fields with names containing "Production Change" or "Rollback"
+                update_fields = {}
+                for field_id, field_info in meta_data.get('fields', {}).items():
+                    field_name = field_info.get('name', '').lower()
+                    if 'production change detail' in field_name and production_details:
+                        # Format as Atlassian Document Format with proper paragraph handling
+                        paragraphs = production_details.split('\n\n')
+                        content = []
+                        for paragraph in paragraphs:
+                            if paragraph.strip():
+                                content.append({
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": paragraph.strip()
+                                        }
+                                    ]
+                                })
+                        
+                        update_fields[field_id] = {
+                            "type": "doc",
+                            "version": 1,
+                            "content": content
+                        }
+                        print(f"Found Production Change Details field: {field_id}")
+                    elif 'rollback' in field_name and rollback_script:
+                        # Format as Atlassian Document Format with proper paragraph handling
+                        paragraphs = rollback_script.split('\n\n')
+                        content = []
+                        for paragraph in paragraphs:
+                            if paragraph.strip():
+                                content.append({
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": paragraph.strip()
+                                        }
+                                    ]
+                                })
+                        
+                        update_fields[field_id] = {
+                            "type": "doc",
+                            "version": 1,
+                            "content": content
+                        }
+                        print(f"Found Rollback Script field: {field_id}")
+                
+                if update_fields:
+                    update_data = {"fields": update_fields}
+                    
+                    response = requests.put(
+                        f'https://{domain}/rest/api/3/issue/{issue_key}',
+                        headers=headers,
+                        json=update_data
+                    )
+                    
+                    print(f"Custom field update response: {response.status_code}")
+                    if response.content:
+                        print(f"Custom field update response: {response.text}")
+                    
+                    if response.status_code == 204:
+                        return jsonify({
+                            'success': True,
+                            'message': 'Custom fields updated successfully',
+                            'updated_fields': list(update_fields.keys())
+                        })
+                    else:
+                        error_data = response.json() if response.content else {'message': 'Unknown error'}
+                        return jsonify({'error': error_data}), response.status_code
+                else:
+                    print("No matching custom fields found, trying to update description instead")
+                    # Fallback: Update the description field with the production details
+                    if production_details:
+                        description_content = {
+                            "type": "doc",
+                            "version": 1,
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Production Change Details:"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                        
+                        # Add production details paragraphs
+                        paragraphs = production_details.split('\n\n')
+                        for paragraph in paragraphs:
+                            if paragraph.strip():
+                                description_content["content"].append({
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": paragraph.strip()
+                                        }
+                                    ]
+                                })
+                        
+                        # Add rollback script if available
+                        if rollback_script:
+                            description_content["content"].append({
+                                "type": "paragraph",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "Production Change Rollback Script:"
+                                    }
+                                ]
+                            })
+                            rollback_paragraphs = rollback_script.split('\n\n')
+                            for paragraph in rollback_paragraphs:
+                                if paragraph.strip():
+                                    description_content["content"].append({
+                                        "type": "paragraph",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": paragraph.strip()
+                                            }
+                                        ]
+                                    })
+                        
+                        update_data = {
+                            "fields": {
+                                "description": description_content
+                            }
+                        }
+                        
+                        response = requests.put(
+                            f'https://{domain}/rest/api/3/issue/{issue_key}',
+                            headers=headers,
+                            json=update_data
+                        )
+                        
+                        print(f"Description update response: {response.status_code}")
+                        if response.content:
+                            print(f"Description update response: {response.text}")
+                        
+                        if response.status_code == 204:
+                            return jsonify({
+                                'success': True,
+                                'message': 'Description updated with production details',
+                                'fallback': True
+                            })
+                        else:
+                            error_data = response.json() if response.content else {'message': 'Unknown error'}
+                            return jsonify({'error': error_data}), response.status_code
+                    else:
+                        return jsonify({'error': 'No matching custom fields found and no production details to add'}), 404
+            else:
+                return jsonify({'error': 'Could not get field metadata'}), 400
+        else:
+            return jsonify({'error': 'Could not get issue data'}), 400
+    except Exception as e:
+        print(f"Exception updating custom fields: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/jira/add-comment', methods=['POST'])
+def add_jira_comment():
+    """Add a comment to a JIRA issue"""
+    data = request.json
+    
+    # Extract credentials and comment data
+    domain = data.get('domain')
+    email = data.get('email')
+    token = data.get('token')
+    issue_key = data.get('issue_key')
+    comment_body = data.get('comment_body')
+    
+    if not all([domain, email, token, issue_key, comment_body]):
+        return jsonify({'error': 'Missing required data'}), 400
+    
+    # Add comment to JIRA issue
+    auth_string = base64.b64encode(f"{email}:{token}".encode()).decode()
+    headers = {
+        'Authorization': f'Basic {auth_string}',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    
+    comment_data = {
+        "body": {
+            "type": "doc",
+            "version": 1,
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": comment_body
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    try:
+        response = requests.post(
+            f'https://{domain}/rest/api/3/issue/{issue_key}/comment',
+            headers=headers,
+            json=comment_data
+        )
+        
+        if response.status_code == 201:
+            result = response.json()
+            return jsonify({
+                'success': True,
+                'comment_id': result.get('id')
+            })
+        else:
+            error_data = response.json() if response.content else {'message': 'Unknown error'}
+            return jsonify({'error': error_data}), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/github/create-branch', methods=['POST'])
+def create_github_branch():
+    """Create a new branch in a GitHub repository"""
+    data = request.json
+    
+    token = data.get('token')
+    repo = data.get('repo')  # format: owner/repository
+    branch_name = data.get('branch_name')
+    base_branch = data.get('base_branch', 'main')
+    
+    if not all([token, repo, branch_name]):
+        return jsonify({'error': 'Missing required data'}), 400
+    
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    
+    try:
+        # Get the SHA of the base branch
+        response = requests.get(f'https://api.github.com/repos/{repo}/git/ref/heads/{base_branch}', headers=headers)
+        
+        if response.status_code != 200:
+            return jsonify({'error': f'Could not find base branch {base_branch}'}), 404
+        
+        base_sha = response.json()['object']['sha']
+        
+        # Create the new branch
+        branch_data = {
+            'ref': f'refs/heads/{branch_name}',
+            'sha': base_sha
+        }
+        
+        response = requests.post(f'https://api.github.com/repos/{repo}/git/refs', headers=headers, json=branch_data)
+        
+        if response.status_code == 201:
+            return jsonify({
+                'success': True,
+                'branch_name': branch_name,
+                'url': f'https://github.com/{repo}/tree/{branch_name}'
+            })
+        else:
+            error_data = response.json() if response.content else {'message': 'Unknown error'}
+            return jsonify({'error': error_data}), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/change_templates/<filename>')
+def serve_template(filename):
+    """Serve template files from change_templates directory"""
+    return send_from_directory('change_templates', filename)
+
+@app.route('/api/test')
+def test_endpoint():
+    """Simple test endpoint to verify server is responding"""
+    return jsonify({'status': 'ok', 'message': 'Server is working'})
+
 @app.route('/logout')
 def logout():
     """Clear all authentication data"""
@@ -535,4 +874,4 @@ if __name__ == '__main__':
     os.makedirs('./data', exist_ok=True)
     os.makedirs('./templates', exist_ok=True)
     
-    app.run(host='0.0.0.0', port=3000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

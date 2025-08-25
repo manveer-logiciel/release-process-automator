@@ -299,14 +299,22 @@
                                 <!-- GitHub Repository (Auto-detected) -->
                                 <div class="mb-3">
                                     <label class="form-label">GitHub Repository</label>
-                                    <div class="input-group">
+                                    <div id="singleRepoSection">
                                         <input type="text" class="form-control" id="githubRepo" placeholder="Will be auto-detected" readonly>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="fetchVersionFromGitHub()" id="fetchVersionBtn" disabled>
-                                            <i class="fas fa-sync me-1"></i>
-                                            Fetch Version
-                                        </button>
                                     </div>
-                                    <small class="form-text text-muted">Repository is automatically detected based on project selection</small>
+                                    <div id="multiRepoSection" style="display: none;">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <label class="form-label small">React App Repository</label>
+                                                <input type="text" class="form-control" id="reactRepo" value="JobProgress-Org/jp_app_main_v2" readonly>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small">Angular App Repository</label>
+                                                <input type="text" class="form-control" id="angularRepo" value="JobProgress-Org/jp_app_main" readonly>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">Repository and versions are automatically detected based on project selection</small>
                                 </div>
 
                                 <!-- Version Display -->
@@ -394,15 +402,20 @@
                                     <textarea class="form-control" id="description" rows="3" placeholder="Additional release notes or details"></textarea>
                                 </div>
 
-                                <div class="d-flex gap-2">
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="fas fa-plus me-1"></i>
-                                        Create Release Card
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" onclick="hideCreateCardForm()">
-                                        Cancel
-                                    </button>
-                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg w-100">
+                                    <i class="fas fa-plus-circle me-2"></i>
+                                    Create Release Card
+                                </button>
+                                
+                                <!-- Debug test button -->
+                                <button type="button" class="btn btn-warning btn-sm mt-2 w-100" onclick="testApiConnection()">
+                                    <i class="fas fa-bug me-1"></i>
+                                    Test API Connection
+                                </button>
+                                
+                                <button type="button" class="btn btn-secondary mt-2" onclick="hideCreateCardForm()">
+                                    Cancel
+                                </button>
                             </form>
                         </div>
                     </div>
@@ -788,6 +801,9 @@
                     const webResult = await webResponse.json();
                     const apiResult = await apiResponse.json();
                     
+                    const detailsResponse = await fetch('/change_templates/web_production_change_detail.md');
+                    const rollbackResponse = await fetch('/change_templates/web_production_rollback_script.md');
+                    
                     if (webResponse.ok && apiResponse.ok && webResult.success && apiResult.success) {
                         // Set current versions
                         document.getElementById('currentWebVersion').value = webResult.version;
@@ -878,32 +894,47 @@
             const projectRepos = projectRepoMapping[projectKey];
             
             if (projectRepos) {
-                // Show repository info based on deployment type
                 const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
-                if (deploymentType === 'web-api') {
-                    document.getElementById('githubRepo').value = `Web: ${projectRepos.web}, API: ${projectRepos.api}`;
-                } else if (deploymentType === 'web-only') {
-                    document.getElementById('githubRepo').value = projectRepos.web;
-                } else if (deploymentType === 'api-only') {
-                    document.getElementById('githubRepo').value = projectRepos.api;
-                } else if (deploymentType === 'public-api') {
-                    document.getElementById('githubRepo').value = projectRepos.publicApi;
-                } else if (deploymentType === 'mobile') {
-                    document.getElementById('githubRepo').value = projectRepos.mobile;
-                }
                 
-                document.getElementById('fetchVersionBtn').disabled = false;
-                
-                // Auto-fetch version if release type and deployment type are selected
-                const releaseType = document.querySelector('input[name="releaseType"]:checked');
-                const deploymentTypeSelected = document.querySelector('input[name="deploymentType"]:checked');
-                if (releaseType && deploymentTypeSelected) {
-                    fetchVersionFromGitHub();
+                if (deploymentType === 'web-only' || deploymentType === 'web-api') {
+                    // Show both repositories for web deployments
+                    document.getElementById('singleRepoSection').style.display = 'none';
+                    document.getElementById('multiRepoSection').style.display = 'block';
+                } else {
+                    // Show single repository for other deployment types
+                    document.getElementById('singleRepoSection').style.display = 'block';
+                    document.getElementById('multiRepoSection').style.display = 'none';
+                    
+                    if (deploymentType === 'api-only') {
+                        document.getElementById('githubRepo').value = projectRepos.api;
+                    } else if (deploymentType === 'mobile') {
+                        document.getElementById('githubRepo').value = projectRepos.mobile;
+                    } else {
+                        // Default to web if no deployment type selected
+                        document.getElementById('githubRepo').value = projectRepos.web;
+                    }
+                    
+                    // Enable fetch button if GitHub is authenticated
+                    const githubAuth = localStorage.getItem('github_auth');
+                    if (githubAuth) {
+                        document.getElementById('fetchVersionBtn').disabled = false;
+                    }
                 }
             } else {
                 document.getElementById('githubRepo').value = '';
                 document.getElementById('fetchVersionBtn').disabled = true;
                 document.getElementById('versionSection').style.display = 'none';
+            }
+        }
+
+        // Auto-fetch versions when both release type and deployment type are selected
+        function autoFetchVersions() {
+            const releaseType = document.querySelector('input[name="releaseType"]:checked')?.value;
+            const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+            
+            // Only auto-fetch if both selections are made
+            if (releaseType && deploymentType) {
+                fetchVersionFromGitHub();
             }
         }
 
@@ -916,6 +947,8 @@
             document.querySelectorAll('input[name="releaseType"]').forEach(radio => {
                 radio.addEventListener('change', function() {
                     const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+                    updateReleaseTitle(); // Update title
+                    autoFetchVersions(); // Auto-fetch versions when both selections are made
                     
                     if (deploymentType === 'web-api') {
                         // Handle dual version scenario
@@ -958,31 +991,121 @@
                 radio.addEventListener('change', function() {
                     detectRepository(); // Update repository display
                     updateReleaseTitle(); // Update title
+                    autoFetchVersions(); // Auto-fetch versions when both selections are made
                 });
             });
         });
 
         document.getElementById('createCardForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            console.log('Form submission started');
             
-            const jiraAuth = JSON.parse(localStorage.getItem('jira_auth'));
+            const jiraAuth = localStorage.getItem('jira_auth');
             if (!jiraAuth) {
                 alert('Please authenticate with JIRA first');
                 return;
             }
+            console.log('JIRA auth found:', jiraAuth);
             
-            const projectKey = document.getElementById('projectKey').value;
-            const issueType = document.getElementById('issueType').value;
-            const summary = document.getElementById('releaseTitle').value;
-            const description = document.getElementById('description').value;
-            const githubRepo = document.getElementById('githubRepo').value;
-            const releaseDate = document.getElementById('releaseDate').value;
+            // Show loading indicator
+            const submitButton = document.querySelector('#createCardForm button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Release Card...';
+            submitButton.disabled = true;
+            console.log('Loading indicator shown');
             
-            let fullDescription = description;
-            if (githubRepo) {
-                fullDescription += `\n\nGitHub Repository: https://github.com/${githubRepo}`;
+            // Add timeout to reset button if stuck
+            const timeoutId = setTimeout(() => {
+                console.error('Form submission timed out after 30 seconds');
+                submitButton.innerHTML = originalButtonText;
+                submitButton.disabled = false;
+                alert('Form submission timed out. Please check the console for errors.');
+            }, 30000);
+            
+            // Clear any previous results
+            const existingResults = document.querySelectorAll('.alert');
+            existingResults.forEach(alert => alert.remove());
+            
+            const projectKey = document.getElementById('projectKey')?.value || '';
+            const summary = document.getElementById('releaseTitle')?.value || '';
+            const issueType = document.getElementById('issueType')?.value || '';
+            const releaseDate = document.getElementById('releaseDate')?.value || '';
+            const jiraKey = document.getElementById('jiraKey')?.value || '';
+            const deploymentType = document.querySelector('input[name="deploymentType"]:checked')?.value;
+            
+            console.log('Form data:', { projectKey, summary, issueType, releaseDate, jiraKey, deploymentType });
+            
+            // Validate required fields
+            if (!projectKey || !summary || !issueType || !deploymentType) {
+                alert('Please fill in all required fields');
+                submitButton.innerHTML = originalButtonText;
+                submitButton.disabled = false;
+                return;
             }
             
+            let processedDetails = '';
+            let processedRollback = '';
+            
+            if (deploymentType === 'web-only' || deploymentType === 'web-api') {
+                // Get version for template processing
+                const version = deploymentType === 'web-api' ? 
+                    document.getElementById('newWebVersion').value : 
+                    document.getElementById('newVersion').value;
+                
+                console.log('Version for template processing:', version);
+                
+                if (!version) {
+                    alert('Version not found. Please ensure versions are fetched before creating the release card.');
+                    submitButton.innerHTML = originalButtonText;
+                    submitButton.disabled = false;
+                    return;
+                }
+                
+                const versionParts = version.split('.');
+                const firstTwoDigits = versionParts.slice(0, 2).join('.');
+                const lastDigit = versionParts[2] || '0';
+                
+                // Read and process templates from .md files
+                try {
+                    console.log('Loading template files...');
+                    const detailsResponse = await fetch('/change_templates/web_production_change_detail.md');
+                    const rollbackResponse = await fetch('/change_templates/web_production_rollback_script.md');
+                    
+                    console.log('Template responses:', detailsResponse.status, rollbackResponse.status);
+                    
+                    if (detailsResponse.ok && rollbackResponse.ok) {
+                        let detailsTemplate = await detailsResponse.text();
+                        let rollbackTemplate = await rollbackResponse.text();
+                        
+                        console.log('Templates loaded successfully');
+                        
+                        // Process placeholders in templates
+                        processedDetails = detailsTemplate
+                            .replace(/\[JIRA-KEY\]/g, jiraKey)
+                            .replace(/\[NEW_VERSION\]/g, version)
+                            .replace(/\[NEW_VERSION_FIRST_2_DIGITS\]/g, firstTwoDigits)
+                            .replace(/\[NEW_VERSION_LAST_DIGIT\]/g, lastDigit);
+                        
+                        processedRollback = rollbackTemplate
+                            .replace(/\[VERSION\]/g, version);
+                            
+                        console.log('Templates processed successfully');
+                    } else {
+                        console.error('Failed to load template files:', detailsResponse.status, rollbackResponse.status);
+                        alert('Failed to load template files. Please check if the template files exist.');
+                        submitButton.innerHTML = originalButtonText;
+                        submitButton.disabled = false;
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Error loading templates:', error);
+                    alert('Error loading templates: ' + error.message);
+                    submitButton.innerHTML = originalButtonText;
+                    submitButton.disabled = false;
+                    return;
+                }
+            }
+
             const issueData = {
                 fields: {
                     project: {
@@ -993,11 +1116,186 @@
                         name: issueType
                     },
                     duedate: releaseDate
-                }
+                },
+                processedDetails,
+                processedRollback,
+                deploymentType
             };
             
+            console.log('Sending request to create JIRA issue:', issueData);
+            
+            let parsedJiraAuth;
             try {
+                parsedJiraAuth = JSON.parse(jiraAuth);
+                console.log('Parsed JIRA auth successfully');
+            } catch (parseError) {
+                console.error('Failed to parse JIRA auth:', parseError);
+                alert('Invalid JIRA authentication data. Please re-authenticate.');
+                return;
+            }
+            
+            const requestBody = {
+                domain: parsedJiraAuth.domain,
+                email: parsedJiraAuth.email,
+                token: parsedJiraAuth.token,
+                issue_data: issueData
+            };
+            console.log('Request body prepared:', requestBody);
+            
+            try {
+                console.log('Making fetch request...');
                 const response = await fetch('/api/jira/create-issue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                console.log('Response received:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    console.error('Response not OK:', response.status, response.statusText);
+                }
+                
+                const result = await response.json();
+                console.log('Response data:', result);
+                
+                if (response.ok && result.success) {
+                    // Update templates with actual JIRA key
+                    const actualJiraKey = result.key;
+                    
+                    // Create GitHub branches if this is a web deployment
+                    if (issueData.deploymentType === 'web-only' || issueData.deploymentType === 'web-api') {
+                        await createGitHubBranches(actualJiraKey, issueData);
+                    }
+                    
+                    // Update JIRA card with processed templates
+                    if (issueData.processedDetails || issueData.processedRollback) {
+                        console.log('Updating JIRA card with templates:', {
+                            processedDetails: issueData.processedDetails,
+                            processedRollback: issueData.processedRollback
+                        });
+                        await updateJiraCardWithTemplates(actualJiraKey, issueData, parsedJiraAuth);
+                    }
+                    
+                    // Create success message with clickable URL
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'alert alert-success mt-3';
+                    successDiv.innerHTML = `
+                        <h5><i class="fas fa-check-circle me-2"></i>JIRA Card Created Successfully!</h5>
+                        <p><strong>Key:</strong> ${result.key}</p>
+                        <p><strong>URL:</strong> <a href="${result.url}" target="_blank" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-external-link-alt me-1"></i>Open JIRA Ticket
+                        </a></p>
+                        <div class="mt-2">
+                            <small class="text-muted">${result.url}</small>
+                        </div>
+                        ${(issueData.deploymentType === 'web-only' || issueData.deploymentType === 'web-api') ? 
+                            '<p class="mt-2"><small class="text-success"><i class="fas fa-check me-1"></i>GitHub branches and templates have been processed</small></p>' : ''}
+                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                    `;
+                    
+                    document.getElementById('createCardForm').appendChild(successDiv);
+                    
+                    // Auto-remove success message after 15 seconds
+                    setTimeout(() => {
+                        if (successDiv.parentElement) {
+                            successDiv.remove();
+                        }
+                    }, 15000);
+                } else {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-3';
+                    errorDiv.innerHTML = `
+                        <h5><i class="fas fa-exclamation-circle me-2"></i>Error Creating JIRA Card</h5>
+                        <p>${JSON.stringify(result.error || 'Unknown error')}</p>
+                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                    `;
+                    document.getElementById('createCardForm').appendChild(errorDiv);
+                }
+            } catch (error) {
+                console.error('Full error details:', error);
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-3';
+                errorDiv.innerHTML = `
+                    <h5><i class="fas fa-exclamation-circle me-2"></i>Error Creating JIRA Card</h5>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Stack:</strong> <small>${error.stack || 'No stack trace available'}</small></p>
+                    <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                `;
+                document.getElementById('createCardForm').appendChild(errorDiv);
+            } finally {
+                // Clear timeout and reset button state
+                clearTimeout(timeoutId);
+                submitButton.innerHTML = originalButtonText;
+                submitButton.disabled = false;
+            }
+        });
+
+        // Test API connection function
+        async function testApiConnection() {
+            console.log('Testing API connection...');
+            try {
+                const response = await fetch('/api/test');
+                const result = await response.json();
+                console.log('API test result:', result);
+                alert(`API Test: ${result.status} - ${result.message}`);
+            } catch (error) {
+                console.error('API test failed:', error);
+                alert(`API Test Failed: ${error.message}`);
+            }
+        }
+
+        // Create GitHub branches
+        async function createGitHubBranches(jiraKey, issueData) {
+            const githubAuth = localStorage.getItem('github_auth');
+            if (!githubAuth) return;
+            
+            const token = JSON.parse(githubAuth).token;
+            const version = issueData.deploymentType === 'web-api' ? 
+                document.getElementById('newWebVersion').value : 
+                document.getElementById('newVersion').value;
+            const branchName = `rc-${jiraKey}-${version}`;
+            
+            const repos = ['JobProgress-Org/jp_app_main_v2', 'JobProgress-Org/jp_app_main'];
+            
+            for (const repo of repos) {
+                try {
+                    const response = await fetch('/api/github/create-branch', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            token: token,
+                            repo: repo,
+                            branch_name: branchName,
+                            base_branch: 'main'
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        console.log(`Created branch ${branchName} in ${repo}: ${result.url}`);
+                    } else {
+                        const error = await response.json();
+                        console.error(`Error creating branch in ${repo}:`, error);
+                    }
+                } catch (error) {
+                    console.error(`Error creating branch in ${repo}:`, error);
+                }
+            }
+        }
+
+        // Update JIRA card with processed templates
+        async function updateJiraCardWithTemplates(jiraKey, issueData, jiraAuth) {
+            try {
+                // Update processed templates with actual JIRA key
+                const updatedDetails = issueData.processedDetails.replace(/TBD/g, jiraKey);
+                
+                // Try to update custom fields for Production Change Details and Rollback Script
+                const response = await fetch('/api/jira/update-custom-fields', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1006,44 +1304,56 @@
                         domain: jiraAuth.domain,
                         email: jiraAuth.email,
                         token: jiraAuth.token,
-                        issue_data: issueData
+                        issue_key: jiraKey,
+                        production_details: updatedDetails,
+                        rollback_script: issueData.processedRollback
                     })
                 });
                 
-                const result = await response.json();
-                
-                if (response.ok && result.success) {
-                    // Create success message with clickable URL
-                    const successDiv = document.createElement('div');
-                    successDiv.className = 'alert alert-success mt-3';
-                    successDiv.innerHTML = `
-                        <h5><i class="fas fa-check-circle me-2"></i>JIRA Card Created Successfully!</h5>
-                        <p><strong>Key:</strong> ${result.key}</p>
-                        <p><strong>URL:</strong> <a href="${result.url}" target="_blank" class="alert-link">${result.url}</a></p>
-                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
-                    `;
-                    
-                    // Insert success message at the top of the form
-                    const form = document.getElementById('createCardForm');
-                    form.parentNode.insertBefore(successDiv, form);
-                    
-                    // Clear form
-                    document.getElementById('createCardForm').reset();
-                    hideCreateCardForm();
-                    
-                    // Auto-remove success message after 10 seconds
-                    setTimeout(() => {
-                        if (successDiv.parentNode) {
-                            successDiv.remove();
-                        }
-                    }, 10000);
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Successfully updated custom fields:', result);
                 } else {
-                    alert('Error creating JIRA card: ' + JSON.stringify(result.error || 'Unknown error'));
+                    const error = await response.json();
+                    console.error('Error updating custom fields:', error);
+                    
+                    // Fallback to comments if custom fields don't work
+                    if (updatedDetails) {
+                        await fetch('/api/jira/add-comment', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                domain: jiraAuth.domain,
+                                email: jiraAuth.email,
+                                token: jiraAuth.token,
+                                issue_key: jiraKey,
+                                comment_body: `Production Change Details:\n\n${updatedDetails}`
+                            })
+                        });
+                    }
+                    
+                    if (issueData.processedRollback) {
+                        await fetch('/api/jira/add-comment', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                domain: jiraAuth.domain,
+                                email: jiraAuth.email,
+                                token: jiraAuth.token,
+                                issue_key: jiraKey,
+                                comment_body: `Production Change Rollback Script:\n\n${issueData.processedRollback}`
+                            })
+                        });
+                    }
                 }
             } catch (error) {
-                alert('Error creating JIRA card: ' + error.message);
+                console.error('Error updating JIRA card with templates:', error);
             }
-        });
+        }
     </script>
 </body>
 </html>
