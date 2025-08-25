@@ -1193,7 +1193,12 @@
                         </div>
                         ${(issueData.deploymentType === 'web-only' || issueData.deploymentType === 'web-api') ? 
                             '<p class="mt-2"><small class="text-success"><i class="fas fa-check me-1"></i>GitHub branches and templates have been processed</small></p>' : ''}
-                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                        <div class="mt-3 d-flex gap-2">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="revertRelease('${result.key}', '${issueData.deploymentType}', '${issueData.version}')">
+                                <i class="fas fa-undo me-1"></i>Revert All Changes
+                            </button>
+                            <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                        </div>
                     `;
                     
                     document.getElementById('createCardForm').appendChild(successDiv);
@@ -1232,6 +1237,125 @@
                 submitButton.disabled = false;
             }
         });
+
+        // Revert release - delete JIRA card and GitHub branches
+        async function revertRelease(jiraKey, deploymentType, version) {
+            if (!confirm(`Are you sure you want to revert all changes for ${jiraKey}?\n\nThis will:\n- Delete the JIRA card\n- Delete GitHub branches (if created)\n\nThis action cannot be undone!`)) {
+                return;
+            }
+
+            const revertBtn = event.target;
+            const originalText = revertBtn.innerHTML;
+            revertBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Reverting...';
+            revertBtn.disabled = true;
+
+            try {
+                const jiraAuth = localStorage.getItem('jira_auth');
+                const githubAuth = localStorage.getItem('github_auth');
+
+                if (!jiraAuth) {
+                    alert('JIRA authentication not found. Please re-authenticate.');
+                    return;
+                }
+
+                let parsedJiraAuth;
+                try {
+                    parsedJiraAuth = JSON.parse(jiraAuth);
+                } catch (parseError) {
+                    console.error('Failed to parse JIRA auth:', parseError);
+                    alert('Invalid JIRA authentication data. Please re-authenticate.');
+                    return;
+                }
+
+                // Delete JIRA card
+                const jiraResponse = await fetch('/api/jira/delete-issue', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        domain: parsedJiraAuth.domain,
+                        email: parsedJiraAuth.email,
+                        token: parsedJiraAuth.token,
+                        issueKey: jiraKey
+                    })
+                });
+
+                const jiraResult = await jiraResponse.json();
+
+                // Delete GitHub branches if applicable
+                let githubResult = { success: true };
+                if ((deploymentType === 'web-only' || deploymentType === 'web-api') && githubAuth) {
+                    try {
+                        const parsedGithubAuth = JSON.parse(githubAuth);
+                        const githubResponse = await fetch('/api/github/delete-branches', {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                token: parsedGithubAuth.token,
+                                version: version,
+                                deploymentType: deploymentType
+                            })
+                        });
+                        githubResult = await githubResponse.json();
+                    } catch (githubError) {
+                        console.error('GitHub deletion error:', githubError);
+                        githubResult = { success: false, error: 'Failed to delete GitHub branches' };
+                    }
+                }
+
+                if (jiraResult.success && githubResult.success) {
+                    // Show success message
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'alert alert-success mt-3';
+                    successDiv.innerHTML = `
+                        <h5><i class="fas fa-check-circle me-2"></i>Revert Completed Successfully!</h5>
+                        <p><strong>JIRA Card:</strong> ${jiraKey} has been deleted</p>
+                        ${(deploymentType === 'web-only' || deploymentType === 'web-api') ? 
+                            '<p><strong>GitHub Branches:</strong> Release branches have been deleted</p>' : ''}
+                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                    `;
+                    
+                    // Remove the original success message
+                    revertBtn.closest('.alert').remove();
+                    
+                    // Add new success message
+                    document.getElementById('createCardForm').appendChild(successDiv);
+                    
+                    // Auto-remove success message after 10 seconds
+                    setTimeout(() => {
+                        if (successDiv.parentElement) {
+                            successDiv.remove();
+                        }
+                    }, 10000);
+                } else {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-3';
+                    errorDiv.innerHTML = `
+                        <h5><i class="fas fa-exclamation-circle me-2"></i>Revert Failed</h5>
+                        <p><strong>JIRA:</strong> ${jiraResult.success ? 'Deleted successfully' : (jiraResult.error || 'Failed to delete')}</p>
+                        <p><strong>GitHub:</strong> ${githubResult.success ? 'Deleted successfully' : (githubResult.error || 'Failed to delete branches')}</p>
+                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                    `;
+                    document.getElementById('createCardForm').appendChild(errorDiv);
+                }
+            } catch (error) {
+                console.error('Revert error:', error);
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-3';
+                errorDiv.innerHTML = `
+                    <h5><i class="fas fa-exclamation-circle me-2"></i>Revert Error</h5>
+                    <p>Failed to revert changes: ${error.message}</p>
+                    <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                `;
+                document.getElementById('createCardForm').appendChild(errorDiv);
+            } finally {
+                revertBtn.innerHTML = originalText;
+                revertBtn.disabled = false;
+            }
+        }
 
         // Test API connection function
         async function testApiConnection() {

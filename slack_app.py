@@ -587,20 +587,77 @@ def update_jira_custom_fields():
                 for field_id, field_info in meta_data.get('fields', {}).items():
                     field_name = field_info.get('name', '').lower()
                     if 'production change detail' in field_name and production_details:
-                        # Format as Atlassian Document Format with proper paragraph handling
-                        paragraphs = production_details.split('\n\n')
+                        # Process markdown content for custom fields - create single code block
                         content = []
-                        for paragraph in paragraphs:
-                            if paragraph.strip():
+                        lines = production_details.split('\n')
+                        current_paragraph = []
+                        all_code_lines = []
+                        in_code_block = False
+                        
+                        for line in lines:
+                            original_line = line
+                            line_stripped = line.strip()
+                            
+                            if line_stripped.startswith('```'):
+                                if in_code_block:
+                                    # End code block
+                                    in_code_block = False
+                                else:
+                                    # Start code block - end current paragraph first
+                                    if current_paragraph:
+                                        content.append({
+                                            "type": "paragraph",
+                                            "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                        })
+                                        current_paragraph = []
+                                    in_code_block = True
+                            elif in_code_block:
+                                # Inside code block - collect all lines
+                                all_code_lines.append(original_line)
+                            elif not line_stripped:
+                                # Empty line outside code block
+                                if current_paragraph:
+                                    content.append({
+                                        "type": "paragraph",
+                                        "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                    })
+                                    current_paragraph = []
+                            elif line_stripped.startswith('### '):
+                                # Heading
+                                if current_paragraph:
+                                    content.append({
+                                        "type": "paragraph", 
+                                        "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                    })
+                                    current_paragraph = []
                                 content.append({
-                                    "type": "paragraph",
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": paragraph.strip()
-                                        }
-                                    ]
+                                    "type": "heading",
+                                    "attrs": {"level": 3},
+                                    "content": [{"type": "text", "text": line_stripped[4:]}]
                                 })
+                            else:
+                                # Regular text
+                                current_paragraph.append(line_stripped)
+                        
+                        # Add remaining paragraph
+                        if current_paragraph:
+                            content.append({
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                            })
+                        
+                        # Add single unified code block at the end if we have code lines
+                        if all_code_lines:
+                            content.append({
+                                "type": "codeBlock",
+                                "attrs": {},
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "\n".join(all_code_lines)
+                                    }
+                                ]
+                            })
                         
                         update_fields[field_id] = {
                             "type": "doc",
@@ -609,20 +666,64 @@ def update_jira_custom_fields():
                         }
                         print(f"Found Production Change Details field: {field_id}")
                     elif 'rollback' in field_name and rollback_script:
-                        # Format as Atlassian Document Format with proper paragraph handling
-                        paragraphs = rollback_script.split('\n\n')
+                        # Process markdown content for rollback script custom field - create single code block
                         content = []
-                        for paragraph in paragraphs:
-                            if paragraph.strip():
-                                content.append({
-                                    "type": "paragraph",
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": paragraph.strip()
-                                        }
-                                    ]
-                                })
+                        lines = rollback_script.split('\n')
+                        current_paragraph = []
+                        all_code_lines = []
+                        in_code_block = False
+                        
+                        for line in lines:
+                            original_line = line
+                            line_stripped = line.strip()
+                            
+                            if line_stripped.startswith('```'):
+                                if in_code_block:
+                                    # End code block
+                                    in_code_block = False
+                                else:
+                                    # Start code block - end current paragraph first
+                                    if current_paragraph:
+                                        content.append({
+                                            "type": "paragraph",
+                                            "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                        })
+                                        current_paragraph = []
+                                    in_code_block = True
+                            elif in_code_block:
+                                # Inside code block - collect all lines
+                                all_code_lines.append(original_line)
+                            elif not line_stripped:
+                                # Empty line outside code block
+                                if current_paragraph:
+                                    content.append({
+                                        "type": "paragraph",
+                                        "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                    })
+                                    current_paragraph = []
+                            else:
+                                # Regular text
+                                current_paragraph.append(line_stripped)
+                        
+                        # Add remaining paragraph
+                        if current_paragraph:
+                            content.append({
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                            })
+                        
+                        # Add single unified code block at the end if we have code lines
+                        if all_code_lines:
+                            content.append({
+                                "type": "codeBlock",
+                                "attrs": {},
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "\n".join(all_code_lines)
+                                    }
+                                ]
+                            })
                         
                         update_fields[field_id] = {
                             "type": "doc",
@@ -662,54 +763,154 @@ def update_jira_custom_fields():
                             "version": 1,
                             "content": [
                                 {
-                                    "type": "paragraph",
+                                    "type": "heading",
+                                    "attrs": {"level": 3},
                                     "content": [
                                         {
                                             "type": "text",
-                                            "text": "Production Change Details:"
+                                            "text": "Production Change Details"
                                         }
                                     ]
                                 }
                             ]
                         }
                         
-                        # Add production details paragraphs
-                        paragraphs = production_details.split('\n\n')
-                        for paragraph in paragraphs:
-                            if paragraph.strip():
+                        # Process production change details lines - create single code block
+                        lines = production_details.split('\n')
+                        current_paragraph = []
+                        all_code_lines = []
+                        in_code_block = False
+                        
+                        for line in lines:
+                            original_line = line
+                            line_stripped = line.strip()
+                            
+                            if line_stripped.startswith('```'):
+                                if in_code_block:
+                                    # End code block
+                                    in_code_block = False
+                                else:
+                                    # Start code block - end current paragraph first
+                                    if current_paragraph:
+                                        description_content["content"].append({
+                                            "type": "paragraph",
+                                            "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                        })
+                                        current_paragraph = []
+                                    in_code_block = True
+                            elif in_code_block:
+                                # Inside code block - collect all lines
+                                all_code_lines.append(original_line)
+                            elif not line_stripped:
+                                if current_paragraph:
+                                    description_content["content"].append({
+                                        "type": "paragraph",
+                                        "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                    })
+                                    current_paragraph = []
+                            elif line_stripped.startswith('### '):
+                                # Heading
+                                if current_paragraph:
+                                    description_content["content"].append({
+                                        "type": "paragraph", 
+                                        "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                                    })
+                                    current_paragraph = []
                                 description_content["content"].append({
-                                    "type": "paragraph",
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": paragraph.strip()
-                                        }
-                                    ]
+                                    "type": "heading",
+                                    "attrs": {"level": 3},
+                                    "content": [{"type": "text", "text": line_stripped[4:]}]
                                 })
+                            else:
+                                # Regular text
+                                current_paragraph.append(line_stripped)
+                        
+                        if current_paragraph:
+                            description_content["content"].append({
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": " ".join(current_paragraph)}]
+                            })
+                        
+                        # Add single unified code block at the end if we have code lines
+                        if all_code_lines:
+                            description_content["content"].append({
+                                "type": "codeBlock",
+                                "attrs": {},
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "\n".join(all_code_lines)
+                                    }
+                                ]
+                            })
                         
                         # Add rollback script if available
                         if rollback_script:
                             description_content["content"].append({
-                                "type": "paragraph",
+                                "type": "heading",
+                                "attrs": {"level": 3},
                                 "content": [
                                     {
                                         "type": "text",
-                                        "text": "Production Change Rollback Script:"
+                                        "text": "Production Change Rollback Script"
                                     }
                                 ]
                             })
-                            rollback_paragraphs = rollback_script.split('\n\n')
-                            for paragraph in rollback_paragraphs:
-                                if paragraph.strip():
-                                    description_content["content"].append({
-                                        "type": "paragraph",
-                                        "content": [
-                                            {
-                                                "type": "text",
-                                                "text": paragraph.strip()
-                                            }
-                                        ]
-                                    })
+                            
+                            # Process rollback script lines - create single code block
+                            rollback_lines = rollback_script.split('\n')
+                            rollback_paragraph = []
+                            rollback_all_code_lines = []
+                            rollback_in_code_block = False
+                            
+                            for line in rollback_lines:
+                                original_line = line
+                                line_stripped = line.strip()
+                                
+                                if line_stripped.startswith('```'):
+                                    if rollback_in_code_block:
+                                        # End code block
+                                        rollback_in_code_block = False
+                                    else:
+                                        # Start code block - end current paragraph first
+                                        if rollback_paragraph:
+                                            description_content["content"].append({
+                                                "type": "paragraph",
+                                                "content": [{"type": "text", "text": " ".join(rollback_paragraph)}]
+                                            })
+                                            rollback_paragraph = []
+                                        rollback_in_code_block = True
+                                elif rollback_in_code_block:
+                                    # Inside code block - collect all lines
+                                    rollback_all_code_lines.append(original_line)
+                                elif not line_stripped:
+                                    if rollback_paragraph:
+                                        description_content["content"].append({
+                                            "type": "paragraph",
+                                            "content": [{"type": "text", "text": " ".join(rollback_paragraph)}]
+                                        })
+                                        rollback_paragraph = []
+                                else:
+                                    rollback_paragraph.append(line_stripped)
+                            
+                            if rollback_paragraph:
+                                description_content["content"].append({
+                                    "type": "paragraph",
+                                    "content": [{"type": "text", "text": " ".join(rollback_paragraph)}]
+                                })
+                            
+                            # Add single unified code block at the end if we have code lines
+                            if rollback_all_code_lines:
+                                description_content["content"].append({
+                                    "type": "codeBlock",
+                                    "attrs": {},
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "\n".join(rollback_all_code_lines)
+                                        }
+                                    ]
+                                })
                         
                         update_data = {
                             "fields": {
@@ -859,9 +1060,117 @@ def serve_template(filename):
     return send_from_directory('change_templates', filename)
 
 @app.route('/api/test')
-def test_endpoint():
-    """Simple test endpoint to verify server is responding"""
-    return jsonify({'status': 'ok', 'message': 'Server is working'})
+def test_api():
+    return jsonify({'status': 'success', 'message': 'API is working correctly'})
+
+@app.route('/api/jira/delete-issue', methods=['DELETE'])
+def delete_jira_issue():
+    try:
+        data = request.json
+        domain = data.get('domain')
+        email = data.get('email')
+        token = data.get('token')
+        issue_key = data.get('issueKey')
+        
+        if not all([domain, email, token, issue_key]):
+            return jsonify({'error': 'Missing required data'}), 400
+        
+        # Create basic auth header
+        auth_string = f"{email}:{token}"
+        auth_bytes = auth_string.encode('ascii')
+        auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+        
+        headers = {
+            'Authorization': f'Basic {auth_b64}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Delete JIRA issue
+        url = f"https://{domain}/rest/api/3/issue/{issue_key}"
+        response = requests.delete(url, headers=headers)
+        
+        print(f"JIRA delete response: {response.status_code}")
+        
+        if response.status_code == 204:
+            return jsonify({'success': True, 'message': f'Issue {issue_key} deleted successfully'})
+        else:
+            error_data = response.text
+            try:
+                error_data = response.json()
+            except:
+                pass
+            print(f"JIRA delete error: {error_data}")
+            return jsonify({'success': False, 'error': error_data}), response.status_code
+            
+    except Exception as e:
+        print(f"Delete JIRA issue error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/github/delete-branches', methods=['DELETE'])
+def delete_github_branches():
+    try:
+        data = request.json
+        token = data.get('token')
+        version = data.get('version')
+        deployment_type = data.get('deploymentType')
+        
+        if not all([token, version, deployment_type]):
+            return jsonify({'error': 'Missing required data'}), 400
+        
+        headers = {
+            'Authorization': f'token {token}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
+        
+        deleted_branches = []
+        errors = []
+        
+        # Determine which repositories to delete branches from
+        repos_to_process = []
+        if deployment_type in ['web-only', 'web-api']:
+            repos_to_process.append('leap-web')
+        if deployment_type in ['api-only', 'web-api', 'public-api']:
+            repos_to_process.append('leap-api')
+        
+        for repo in repos_to_process:
+            branch_name = f"release/{version}"
+            
+            # Delete branch
+            delete_url = f"https://api.github.com/repos/leap-labs/{repo}/git/refs/heads/release/{version}"
+            delete_response = requests.delete(delete_url, headers=headers)
+            
+            print(f"GitHub delete branch response for {repo}: {delete_response.status_code}")
+            
+            if delete_response.status_code == 204:
+                deleted_branches.append(f"{repo}:{branch_name}")
+            elif delete_response.status_code == 422:
+                # Branch doesn't exist - not an error
+                print(f"Branch {branch_name} doesn't exist in {repo}")
+            else:
+                error_msg = f"Failed to delete {branch_name} from {repo}"
+                try:
+                    error_data = delete_response.json()
+                    error_msg += f": {error_data.get('message', 'Unknown error')}"
+                except:
+                    pass
+                errors.append(error_msg)
+        
+        if errors:
+            return jsonify({
+                'success': False, 
+                'error': '; '.join(errors),
+                'deleted_branches': deleted_branches
+            }), 400
+        else:
+            return jsonify({
+                'success': True, 
+                'message': 'Branches deleted successfully',
+                'deleted_branches': deleted_branches
+            })
+            
+    except Exception as e:
+        print(f"Delete GitHub branches error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/logout')
 def logout():
